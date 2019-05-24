@@ -1,0 +1,27 @@
+plugins {
+    id 'java'
+}
+
+ext {
+    junitJupiterEngineVersion = '5.4.0'
+}
+
+group 'me.maxwell'
+version '0.0.1'
+
+sourceCompatibility = 1.8
+
+repositories {
+    maven {
+        url 'https://maven.aliyun.com/nexus/content/groups/public/'
+    }
+    mavenCentral()
+}
+dependencies {
+    compileOnly "org.projectlombok:lombok:1.18.6"
+    annotationProcessor "org.projectlombok:lombok:1.18.6"
+
+    implementation "org.jdeferred.v2:jdeferred-core:2.0.0-beta2"
+    testRuntimeOnly "org.junit.jupiter:junit-jupiter-engine:$junitJupiterEngineVersion"
+    testImplementation "org.junit.jupiter:junit-jupiter-api:$junitJupiterEngineVersion"
+}
