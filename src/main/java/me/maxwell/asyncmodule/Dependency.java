@@ -1,29 +1,42 @@
 package me.maxwell.asyncmodule;
 
-public class Dependency<M> {
-    private String name;
-    private Class<M> type;
+import java.util.Set;
+import java.util.TreeSet;
 
-    private Dependency(
-        String moduleName,
-        Class<M> moduleType
-    ) {
-        this.name = moduleName;
-        this.type = moduleType;
+public class Dependency {
+    private final Module module;
+    private Set<String> requireNames;
+
+    public Dependency(Module module, String ...names) {
+        requireNames = new TreeSet<>();
+        for(String name: names) {
+            requireNames.add(name);
+        }
+
+        this.module = module;
     }
 
-    public static <M> Dependency<M> of(
-        String moduleName,
-        Class<M> moduleType
-    ) {
-        return new Dependency<>(moduleName, moduleType);
+    public void addRequire(String name) {
+        requireNames.add(name);
     }
 
-    public String getName() {
-        return name;
+    public void addRequire(Set<String> names) {
+        requireNames.addAll(names);
     }
 
-    public Class<M> getType() {
-        return type;
+    public void removeRequire(String name) {
+        requireNames.remove(name);
+    }
+
+    public void removeRequire(Set<String> names) {
+        requireNames.removeAll(names);
+    }
+
+    public Module getModule() {
+        return module;
+    }
+
+    public Set<String> getRequireNames() {
+        return requireNames;
     }
 }

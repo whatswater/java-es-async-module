@@ -1,12 +1,5 @@
 package me.maxwell.asyncmodule;
 
-import org.jdeferred2.DeferredManager;
-import org.jdeferred2.Promise;
-import org.jdeferred2.impl.DefaultDeferredManager;
-import org.jdeferred2.multiple.MasterProgress;
-import org.jdeferred2.multiple.MultipleResults2;
-import org.jdeferred2.multiple.OneReject;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -15,18 +8,6 @@ import java.util.TreeMap;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ModuleSystemTest {
-    public static class Counter {
-        private int count = 1;
-
-        public int increment() {
-            return ++count;
-        }
-
-        public int decrement() {
-            return --count;
-        }
-    }
-
     public static class Config implements Module {
         @Override
         public void register(ModuleFactory factory) {
@@ -51,10 +32,13 @@ public class ModuleSystemTest {
 
         @Override
         public void register(ModuleFactory factory) {
-            factory.require(Config.class, "url", String.class).then(url -> {
-                this.url = url;
-                factory.export(this, DataSource.class);
-            });
+            factory.require(this, Config.class, "url");
+        }
+
+        @Override
+        public void onDependencyResolved(ModuleFactory factory, Class<? extends Module> moduleClass, String name) {
+            url = factory.getExport(moduleClass, name);
+            factory.export(this, DataSource.class);
         }
 
         public String getUrl() {
@@ -73,18 +57,23 @@ public class ModuleSystemTest {
 
         @Override
         public void register(ModuleFactory factory) {
-            factory.require(DataSource.class).then(dataSource -> {
-                Article article = new Article();
-                article.id = "1";
-                article.content = "4567";
-                article.url = dataSource.getUrl();
+            factory.require(this, DataSource.class);
+        }
 
-                data = new TreeMap<>();
-                data.put("1", article);
+        @Override
+        public void onDependencyResolved(ModuleFactory factory, Class<? extends Module> moduleClass, String name) {
+            DataSource dataSource = factory.getExport(moduleClass, name);
 
-                factory.export(this, ArticleService.class);
-                factory.export("MAX_INT_VALUE", Integer.MAX_VALUE, DataSource.class);
-            });
+            Article article = new Article();
+            article.id = "1";
+            article.content = "4567";
+            article.url = dataSource.getUrl();
+
+            data = new TreeMap<>();
+            data.put("1", article);
+
+            factory.export(this, ArticleService.class);
+            factory.export("MAX_INT_VALUE", Integer.MAX_VALUE, DataSource.class);
         }
 
         public Article getArticle(String id) {
@@ -92,64 +81,30 @@ public class ModuleSystemTest {
         }
     }
 
-    ModuleFactory factory;
+    public static class TestModule implements Module {
+        @Override
+        public void register(ModuleFactory factory) {
+            factory.require(this, ArticleService.class);
+        }
 
-    @BeforeEach
-    public void beforeEach() {
-        factory = new ModuleFactory();
-        factory.export("USER_NAME_PREFIX", "USER_NAME_");
-        factory.export("increment", new Counter());
+        @Override
+        public void onDependencyResolved(ModuleFactory factory, Class<? extends Module> moduleClass, String name) {
+            if("default".equals(name)) {
+                ArticleService articleService = factory.getExport(moduleClass, name);
+                Article article = articleService.getArticle("1");
+                assertTrue(article != null);
+                assertTrue("1".equals(article.id));
+                assertTrue("jdbc:postgresql://localhost:5236/document".equals(article.url));
+            }
+            else if("MAX_INT_VALUE".equals(name)) {
+                Integer maxIntValue = factory.getExport(moduleClass, name);
+                assertTrue(Integer.MAX_VALUE == maxIntValue.intValue());
+            }
+        }
     }
 
     @Test
-    public void globalModuleTest() {
-        Promise<Counter, ModuleSystemException, Void> promise = factory.require("increment", Counter.class);
-
-        promise.done(counter -> {
-            assertTrue(counter.increment() == 2);
-            assertTrue(counter.decrement() == 1);
-        });
-
-        Promise<MultipleResults2<String, Counter>, OneReject<ModuleSystemException>, MasterProgress> promise1 = factory.require(
-            Dependency.of("USER_NAME_PREFIX", String.class),
-            Dependency.of("increment", Counter.class)
-        );
-
-        promise1.then(multi -> {
-            assertTrue(multi.getSecond().getResult().increment() == 2);
-        });
-    }
-
-    @Test
-    public void defaultExportTest() {
-        factory.require(ArticleService.class).then(articleService -> {
-            Article article = articleService.getArticle("1");
-            assertTrue(article != null);
-            assertTrue("1".equals(article.id));
-            assertTrue("jdbc:postgresql://localhost:5236/document".equals(article.url));
-        });
-
-        factory.require(ArticleService.class).then(articleService -> {
-            Article article = articleService.getArticle("1");
-            assertTrue(article != null);
-            assertTrue("1".equals(article.id));
-            assertTrue("jdbc:postgresql://localhost:5236/document".equals(article.url));
-        });
-    }
-
-    @Test
-    public void moduleSystemTest() {
-        Promise<ArticleService, ModuleSystemException, Void> promise1 = factory.require(ArticleService.class);
-        Promise<Integer, ModuleSystemException, Void> promise2 = factory.require(ArticleService.class, "MAX_INT_VALUE", Integer.class);
-
-        DeferredManager deferredManager = new DefaultDeferredManager();
-        deferredManager.when(promise1, promise2).then(multi -> {
-            Article article = multi.getFirst().getValue().getArticle("1");
-            assertTrue(article != null);
-            assertTrue("1".equals(article.id));
-            assertTrue("jdbc:postgresql://localhost:5236/document".equals(article.url));
-
-            assertTrue(multi.getSecond().getValue() == Integer.MAX_VALUE);
-        });
+    public void moduleSystemTest() throws ClassNotFoundException {
+        ModuleSystem.load("me.maxwell.asyncmodule.ModuleSystemTest$TestModule");
     }
 }
