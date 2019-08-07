@@ -5,7 +5,7 @@ public class ModuleSystem {
     public static ModuleFactory load(String modulePath) throws ClassNotFoundException {
         Class<?> cls = Class.forName(modulePath);
         if(!Module.class.isAssignableFrom(cls)) {
-            throw new RuntimeException("cls must be a module");
+            throw new ModuleSystemException("The cls: " + cls.getName() + "must implements Module Interface when loading");
         }
 
         Class<Module> moduleClass = (Class<Module>) cls;

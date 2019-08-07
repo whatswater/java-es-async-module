@@ -1,18 +1,15 @@
 package me.maxwell.asyncmodule;
 
-import org.jdeferred2.Deferred;
+import lombok.Setter;
 
 import java.util.*;
 
-// TODO 优化依赖列表的存储
 public class ModuleInfo {
     private Module moduleInstance;
     private List<Dependency> dependencyList = new ArrayList<>();
     private Map<String, Object> exports = new TreeMap<>();
-
-    public ModuleInfo() {
-
-    }
+    @Setter
+    private ModuleState moduleState;
 
     public Module getModuleInstance() {
         return moduleInstance;
@@ -21,12 +18,18 @@ public class ModuleInfo {
     public ModuleInfo(Class<? extends Module> moduleClass) {
         try {
             this.moduleInstance = moduleClass.newInstance();
+            this.moduleState = ModuleState.INSTANCE;
         } catch(InstantiationException | IllegalAccessException e) {
             throw new InstanceModuleException(
                 "instance module failed, the module class: " + moduleClass.getName(),
                 e
             );
         }
+    }
+
+    public void registerModule(ModuleFactory factory) {
+        this.moduleInstance.register(factory);
+        this.moduleState = ModuleState.LOADING;
     }
 
     public List<Dependency> getDependencyList() {

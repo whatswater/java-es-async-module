@@ -24,6 +24,7 @@ public class ModuleSystemTest {
             factory.export("minimumIdle", 1, Config.class);
             factory.export("poolName", "document-pool", Config.class);
             factory.export("allowPoolSuspension", true, Config.class);
+            factory.setModudleLoaded(this);
         }
     }
 
@@ -39,6 +40,7 @@ public class ModuleSystemTest {
         public void onDependencyResolved(ModuleFactory factory, Class<? extends Module> moduleClass, String name) {
             url = factory.getExport(moduleClass, name);
             factory.export(this, DataSource.class);
+            factory.setModudleLoaded(this);
         }
 
         public String getUrl() {
@@ -74,6 +76,7 @@ public class ModuleSystemTest {
 
             factory.export(this, ArticleService.class);
             factory.export("MAX_INT_VALUE", Integer.MAX_VALUE, DataSource.class);
+            factory.setModudleLoaded(this);
         }
 
         public Article getArticle(String id) {
@@ -82,6 +85,8 @@ public class ModuleSystemTest {
     }
 
     public static class TestModule implements Module {
+        ArticleService articleService;
+
         @Override
         public void register(ModuleFactory factory) {
             factory.require(this, ArticleService.class);
@@ -90,7 +95,7 @@ public class ModuleSystemTest {
         @Override
         public void onDependencyResolved(ModuleFactory factory, Class<? extends Module> moduleClass, String name) {
             if("default".equals(name)) {
-                ArticleService articleService = factory.getExport(moduleClass, name);
+                articleService = factory.getExport(moduleClass, name);
                 Article article = articleService.getArticle("1");
                 assertTrue(article != null);
                 assertTrue("1".equals(article.id));
@@ -99,6 +104,10 @@ public class ModuleSystemTest {
             else if("MAX_INT_VALUE".equals(name)) {
                 Integer maxIntValue = factory.getExport(moduleClass, name);
                 assertTrue(Integer.MAX_VALUE == maxIntValue.intValue());
+            }
+
+            if(articleService != null) {
+                factory.setModudleLoaded(this);
             }
         }
     }
