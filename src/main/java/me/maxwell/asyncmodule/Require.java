@@ -3,11 +3,11 @@ package me.maxwell.asyncmodule;
 import java.util.Set;
 import java.util.TreeSet;
 
-public class Dependency {
+public class Require {
     private final Module module;
     private Set<String> requireNames;
 
-    public Dependency(Module module, String ...names) {
+    public Require(Module module, String ...names) {
         requireNames = new TreeSet<>();
         for(String name: names) {
             requireNames.add(name);

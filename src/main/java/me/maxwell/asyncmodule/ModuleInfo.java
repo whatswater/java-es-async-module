@@ -1,22 +1,16 @@
 package me.maxwell.asyncmodule;
 
-import lombok.Setter;
-
 import java.util.*;
 
 public class ModuleInfo {
     private Module moduleInstance;
-    private List<Dependency> dependencyList = new ArrayList<>();
-    private Map<String, Object> exports = new TreeMap<>();
-    @Setter
+    private Map<String, ModuleListenerList> exports = new TreeMap<>();
     private ModuleState moduleState;
+    private ModuleFactory factory;
 
-    public Module getModuleInstance() {
-        return moduleInstance;
-    }
-
-    public ModuleInfo(Class<? extends Module> moduleClass) {
+    public ModuleInfo(Class<? extends Module> moduleClass, ModuleFactory factory) {
         try {
+            this.factory = factory;
             this.moduleInstance = moduleClass.newInstance();
             this.moduleState = ModuleState.INSTANCE;
         } catch(InstantiationException | IllegalAccessException e) {
@@ -27,37 +21,105 @@ public class ModuleInfo {
         }
     }
 
-    public void registerModule(ModuleFactory factory) {
-        this.moduleInstance.register(factory);
+    protected void registerModule() {
+        this.moduleInstance.register(this);
         this.moduleState = ModuleState.LOADING;
     }
 
-    public List<Dependency> getDependencyList() {
-        return dependencyList;
+    public final void require(
+            Class<? extends Module> moduleClass
+    ) {
+        require(moduleClass, ModuleFactory.DEFAULT_VERSION);
     }
 
-    public Dependency addDependency(Dependency newDependency) {
-        for(Dependency dependency: dependencyList) {
-            if(dependency.getModule().equals(newDependency)) {
-                dependency.addRequire(newDependency.getRequireNames());
+    public final void require(
+            Class<? extends Module> moduleClass,
+            String... moduleNames
+    ) {
+        Require require = new Require(moduleInstance, moduleNames);
+        factory.require(moduleClass, require);
+    }
 
-                return dependency;
-            }
+    public void addDependency(Require newRequire) {
+        Set<String> names = newRequire.getRequireNames();
+        for(String name: names) {
+            addDependency(name, newRequire.getModule());
+        }
+    }
+
+    public void addDependency(String name, Module module) {
+        ModuleListenerList moduleListenerList = exports.get(name);
+        if(moduleListenerList == null) {
+            moduleListenerList = new ModuleListenerList();
+            exports.put(name, moduleListenerList);
+        }
+        List<Module> moduleList = moduleListenerList.getModuleList();
+        if(moduleList == null) {
+            moduleList = new ArrayList<>();
+            moduleListenerList.setModuleList(moduleList);
         }
 
-        dependencyList.add(newDependency);
-        return newDependency;
+        if(moduleListenerList.getModuleExport() != null) {
+            factory.onModuleRequireResolved(module, getModuleClass(), name);
+        }
+        moduleList.add(module);
     }
 
-    public void addExport(String name, Object obj) {
-        exports.put(name, obj);
+    public void export(Object obj) {
+        export(ModuleFactory.DEFAULT_VERSION, obj);
     }
 
-    public boolean hasExport(String name) {
-        return exports.containsKey(name);
+    public void export(String name, Object obj) {
+        ModuleListenerList moduleListenerList = exports.get(name);
+        if(moduleListenerList == null) {
+            moduleListenerList = new ModuleListenerList();
+            exports.put(name, moduleListenerList);
+        }
+        moduleListenerList.setModuleExport(obj);
+        List<Module> moduleList = moduleListenerList.getModuleList();
+        if(moduleList != null) {
+            for(Module module: moduleList) {
+                factory.onModuleRequireResolved(module, getModuleClass(), name);
+            }
+        }
+    }
+
+    public <T> T getModuleExport(Class<? extends Module> cls, String name) {
+        return (T)factory.getExport(cls, name);
     }
 
     public Object getExport(String name) {
-        return exports.get(name);
+        ModuleListenerList moduleListenerList = exports.get(name);
+        if(moduleListenerList == null) {
+            return null;
+        }
+        return moduleListenerList.getModuleExport();
+    }
+
+    public void setModuleLoaded() {
+        moduleState = ModuleState.RUNNING;
+        for(Map.Entry<String, ModuleListenerList> entry: exports.entrySet()) {
+            if(entry.getValue().getModuleExport() != null) {
+                continue;
+            }
+            List<Module> moduleList = entry.getValue().getModuleList();
+            if(moduleList != null) {
+                for(Module module: moduleList) {
+                    factory.onModuleRequireMiss(module, getModuleClass(), entry.getKey());
+                }
+            }
+        }
+    }
+
+    public Class<? extends Module> getModuleClass() {
+        return moduleInstance.getClass();
+    }
+
+    public ModuleState getModuleState() {
+        return moduleState;
+    }
+
+    public ModuleFactory getFactory() {
+        return factory;
     }
 }
