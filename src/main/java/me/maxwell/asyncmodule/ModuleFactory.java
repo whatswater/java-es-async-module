@@ -1,170 +1,66 @@
 package me.maxwell.asyncmodule;
 
-
-import org.jdeferred2.Deferred;
-import org.jdeferred2.DeferredManager;
-import org.jdeferred2.Promise;
-import org.jdeferred2.impl.DefaultDeferredManager;
-import org.jdeferred2.impl.DeferredObject;
-import org.jdeferred2.multiple.*;
-
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.TreeMap;
 
+// 模块本身是否存在，根据类加载器确定；模块导出了某个对象，由模块系统支持
+// 不同工厂的NAME_SPACE实例属性可以相同，使用NAME_SPACE实现资源隔离。
+// 使用版本号实现模块路径隔离。
+// TODO 测试现在的加载逻辑 已经完成
+// TODO 编写顶层模块的load方法 已经完成
+// TODO 优化ModuleFactory中moduleInfoMap的存储，优化ModuleInfo的dependencyList存储 已经完成
+// TODO 在工厂中添加一个方法，模块能够通知模块已经完全加载完毕 已经完成
+// TODO require的时候，Name加类型属性，为Symbol，所有的和Name相关的，均加上泛型
+// TODO 当模块加载完毕后，如果有其他模块的依赖未满足，那么需要通知其他的模块 已经完成
+// TODO 模块工厂需要提供所有的模块均已加载完毕的事件。
+// TODO 设计类加载器。已经完成。
+// TODO 当某个模块不使用模块类加载器时，此模块依赖的类也不会使用模块类加载器，建立一个公共类加载器，作为没有找到模块类加载器的后备。
+// TODO 解决由类加载器所带来的权限问题
+// TODO 当模块加载完毕后，此模块所导出的对象的类型全部在另外一个类加载器中，那么记录此模块的此特性，在重新加载的时候，不需要更新其上层模块
+// TODO 设计模块卸载的接口，以释放资源。
 public class ModuleFactory {
-    private Map<Class<? extends Module>, ModuleInfo> moduleInfoMap = new ConcurrentHashMap<>();
+    public static final String DEFAULT_VERSION = "default";
 
-    private ModuleInfo getModuleInfo(Class<? extends Module> moduleClass) {
-        ModuleInfo moduleInfo = moduleInfoMap.get(moduleClass);
-        if(moduleInfo == null) {
-            moduleInfo = new ModuleInfo(moduleClass);
-            moduleInfoMap.put(moduleClass, moduleInfo);
-            moduleInfo.getModuleInstance().register(this);
+    private Map<String, ModuleInfo> moduleInfoMap = new TreeMap<>();
+
+    public String getModuleName(Class<? extends Module> moduleClass) {
+        String name = moduleClass.getName();
+        ModuleVersion version = moduleClass.getDeclaredAnnotation(ModuleVersion.class);
+        String v = DEFAULT_VERSION;
+        if(version != null) {
+            v = version.value();
         }
+        return name + ":" + v;
+    }
 
+    public ModuleInfo getModuleInfo(Class<? extends Module> moduleClass) {
+        String key = getModuleName(moduleClass);
+        ModuleInfo moduleInfo = moduleInfoMap.get(key);
+        if(moduleInfo == null) {
+            moduleInfo = new ModuleInfo(moduleClass, this);
+            moduleInfoMap.put(key, moduleInfo);
+            moduleInfo.registerModule();
+        }
         return moduleInfo;
     }
 
-    public final <M> Promise<M, ModuleSystemException, Void> require(
-        Class<? extends Module> moduleClass,
-        Class<M> moduleType
-    ) {
-        return require(moduleClass, "default", moduleType);
-    }
-
-    public final <M extends Module> Promise<M, ModuleSystemException, Void> require(
-        Class<M> moduleClass
-    ) {
-        return require(moduleClass, "default", moduleClass);
-    }
-
-    public final <M> Promise<M, ModuleSystemException, Void> require(
-        String moduleName,
-        Class<M> moduleType
-    ) {
-        return require(GlobalModule.class, moduleName, moduleType);
-    }
-
-    public final <M> Promise<M, ModuleSystemException, Void> require(
-        Class<? extends Module> moduleClass,
-        String moduleName,
-        Class<M> moduleType
-    ) {
-        Dependency<M> dependency = Dependency.of(moduleName, moduleType);
-        return require(moduleClass, dependency);
-    }
-
-    public final <M> Promise<M, ModuleSystemException, Void> require(
-        Dependency<M> dependency
-    ) {
-        return require(GlobalModule.class, dependency);
-    }
-
-    public final <M> Promise<M, ModuleSystemException, Void> require(
-        Class<? extends Module> moduleClass,
-        Dependency<M> dependency
-    ) {
-        Deferred<M, ModuleSystemException, Void> deferred = new DeferredObject<>();
-        this.registerDependency(dependency, deferred, moduleClass);
-
-        return deferred.promise();
-    }
-
-    public final <M, N> Promise<MultipleResults2<M,N>, OneReject<ModuleSystemException>, MasterProgress> require(
-        Dependency<M> dependency1,
-        Dependency<N> dependency2
-    ) {
-        return require(GlobalModule.class, dependency1, dependency2);
-    }
-
-    public final <M, N> Promise<MultipleResults2<M,N>, OneReject<ModuleSystemException>, MasterProgress> require(
-        Class<? extends Module> moduleClass,
-        Dependency<M> dependency1,
-        Dependency<N> dependency2
-    ) {
-        Promise<M, ModuleSystemException, Void> promise1 = require(moduleClass, dependency1);
-        Promise<N, ModuleSystemException, Void> promise2 = require(moduleClass, dependency2);
-
-        DeferredManager dm = new DefaultDeferredManager();
-        return dm.when(promise1, promise2);
-    }
-
-    public final <M, N, L> Promise<MultipleResults3<M,N,L>, OneReject<ModuleSystemException>, MasterProgress> require(
-        Dependency<M> dependency1,
-        Dependency<N> dependency2,
-        Dependency<L> dependency3
-    ) {
-        return require(GlobalModule.class, dependency1, dependency2, dependency3);
-    }
-
-    public final <M, N, L> Promise<MultipleResults3<M,N,L>, OneReject<ModuleSystemException>, MasterProgress> require(
-        Class<? extends Module> moduleClass,
-        Dependency<M> dependency1,
-        Dependency<N> dependency2,
-        Dependency<L> dependency3
-    ) {
-        Promise<M, ModuleSystemException, Void> promise1 = require(moduleClass, dependency1);
-        Promise<N, ModuleSystemException, Void> promise2 = require(moduleClass, dependency2);
-        Promise<L, ModuleSystemException, Void> promise3 = require(moduleClass, dependency3);
-
-        DeferredManager dm = new DefaultDeferredManager();
-        return dm.when(promise1, promise2, promise3);
-    }
-
-    public final <M, N, L, K> Promise<MultipleResults4<M,N,L, K>, OneReject<ModuleSystemException>, MasterProgress> require(
-        Dependency<M> dependency1,
-        Dependency<N> dependency2,
-        Dependency<L> dependency3,
-        Dependency<K> dependency4
-    ) {
-        return require(GlobalModule.class, dependency1, dependency2, dependency3, dependency4);
-    }
-
-    public final <M, N, L, K> Promise<MultipleResults4<M,N,L, K>, OneReject<ModuleSystemException>, MasterProgress> require(
-        Class<? extends Module> moduleClass,
-        Dependency<M> dependency1,
-        Dependency<N> dependency2,
-        Dependency<L> dependency3,
-        Dependency<K> dependency4
-    ) {
-        Promise<M, ModuleSystemException, Void> promise1 = require(moduleClass, dependency1);
-        Promise<N, ModuleSystemException, Void> promise2 = require(moduleClass, dependency2);
-        Promise<L, ModuleSystemException, Void> promise3 = require(moduleClass, dependency3);
-        Promise<K, ModuleSystemException, Void> promise4 = require(moduleClass, dependency4);
-
-        DeferredManager dm = new DefaultDeferredManager();
-        return dm.when(promise1, promise2, promise3, promise4);
-    }
-
-    public void export(String name, Object obj, Class<? extends Module> moduleClass) {
+    public void require(Class<? extends Module> moduleClass, Require require) {
         ModuleInfo moduleInfo = getModuleInfo(moduleClass);
-        moduleInfo.addExport(name, obj);
+        moduleInfo.addDependency(require);
     }
 
-    public void export(Object obj, Class<? extends Module> moduleClass) {
+    public Object getExport(Class<? extends Module> moduleClass, String name) {
         ModuleInfo moduleInfo = getModuleInfo(moduleClass);
-        moduleInfo.addExport("default", obj);
+        return moduleInfo.getExport(name);
     }
 
-    public void export(String name, Object obj) {
-        export(name, obj, GlobalModule.class);
+    public void onModuleRequireResolved(Module module, Class<? extends Module> requiredModuleClass, String name) {
+        ModuleInfo info = getModuleInfo(module.getClass());
+        module.onRequireResolved(info, requiredModuleClass, name);
     }
 
-    <M> void registerDependency(
-        Dependency<M> dependency,
-        Deferred<M, ModuleSystemException, Void> deferred,
-        Class<? extends Module> from) {
-
-        ModuleInfo moduleInfo = getModuleInfo(from);
-
-        if(moduleInfo.hasExport(dependency.getName())) {
-            deferred.resolve((M)moduleInfo.getExport(dependency.getName()));
-        }
-        else {
-            moduleInfo.addDependency(
-                dependency.getName(),
-                (Deferred<Object, ModuleSystemException, Void>) deferred
-            );
-        }
+    public void onModuleRequireMiss(Module module, Class<? extends Module> requiredModuleClass, String name) {
+        ModuleInfo info = getModuleInfo(module.getClass());
+        module.onMissRequire(info, requiredModuleClass, name);
     }
 }
