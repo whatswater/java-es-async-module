@@ -3,7 +3,7 @@ package me.maxwell.asyncmodule;
 import java.util.Map;
 import java.util.TreeMap;
 
-// 模块本身是否存在，根据类加载器确定；模块导出了某个对象，由模块系统支持
+// 模块本身是否存在，根据类加载器确定；模块是否导出了某个对象，由模块系统支持
 // 不同工厂的NAME_SPACE实例属性可以相同，使用NAME_SPACE实现资源隔离。
 // 使用版本号实现模块路径隔离。
 // TODO 测试现在的加载逻辑 已经完成
@@ -15,9 +15,10 @@ import java.util.TreeMap;
 // TODO 模块工厂需要提供所有的模块均已加载完毕的事件。
 // TODO 设计类加载器。已经完成。
 // TODO 当某个模块不使用模块类加载器时，此模块依赖的类也不会使用模块类加载器，建立一个公共类加载器，作为没有找到模块类加载器的后备。
-// TODO 解决由类加载器所带来的权限问题
+// TODO 解决由类加载器所带来的权限问题 已经解决
 // TODO 当模块加载完毕后，此模块所导出的对象的类型全部在另外一个类加载器中，那么记录此模块的此特性，在重新加载的时候，不需要更新其上层模块
 // TODO 设计模块卸载的接口，以释放资源。
+// TODO 编写模块重新加载的方法
 public class ModuleFactory {
     public static final String DEFAULT_VERSION = "default";
 

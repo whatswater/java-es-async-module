@@ -3,11 +3,13 @@ package me.maxwell.asyncmodule;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Map;
+import java.util.*;
 
 public class ModuleClassLoader extends ClassLoader {
     private Map<String, String> versionMap;
     private ClassLoaderFinder finder;
+    private List<Class<? extends Module>> moduleClassList;
+    private Set<ModuleClassLoader> dependencys;
 
     public ModuleClassLoader(ClassLoader parent) {
         super(parent);
@@ -28,6 +30,7 @@ public class ModuleClassLoader extends ClassLoader {
             Class<?> cls;
             if(classLoader != null) {
                 cls = classLoader.findClass(name);
+                classLoader.addDependency(this);
             }
             else {
                 cls = getParent().loadClass(name);
@@ -39,6 +42,7 @@ public class ModuleClassLoader extends ClassLoader {
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public Class<?> findClass(String name) throws ClassNotFoundException {
         Class<?> cls = findLoadedClass(name);
@@ -47,7 +51,7 @@ public class ModuleClassLoader extends ClassLoader {
         }
         InputStream is = this.getClass().getResourceAsStream("/" + name.replace(".", "/") + ".class");
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        int len = -1;
+        int len;
         byte[] buff = new byte[1024*4];
         try {
             while((len = is.read(buff)) != -1) {
@@ -57,7 +61,26 @@ public class ModuleClassLoader extends ClassLoader {
             throw new ClassNotFoundException(name);
         }
         byte[] data = baos.toByteArray();
-        return defineClass(name, data, 0, data.length);
+
+        Class<?> newCls = defineClass(name, data, 0, data.length);
+        if(Module.class.isAssignableFrom(newCls)) {
+            addModuleClass((Class<? extends Module>) newCls);
+        }
+        return newCls;
+    }
+
+    public void addModuleClass(Class<? extends Module> moduleClass) {
+        if(this.moduleClassList == null) {
+            this.moduleClassList = new ArrayList<>();
+        }
+        this.moduleClassList.add(moduleClass);
+    }
+
+    public void addDependency(ModuleClassLoader moduleClassLoader) {
+        if(this.dependencys == null) {
+            this.dependencys = new HashSet<>();
+        }
+        this.dependencys.add(moduleClassLoader);
     }
 
     public void setFinder(ClassLoaderFinder finder) {
