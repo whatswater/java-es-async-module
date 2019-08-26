@@ -119,6 +119,9 @@ public class ModuleInfo {
         return moduleState;
     }
 
+    public void setFactory(ModuleFactory factory) {
+        this.factory = factory;
+    }
     public ModuleFactory getFactory() {
         return factory;
     }
