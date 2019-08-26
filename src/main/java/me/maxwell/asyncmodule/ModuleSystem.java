@@ -1,20 +1,20 @@
 package me.maxwell.asyncmodule;
 
-import java.util.Map;
+import java.util.*;
 
 public class ModuleSystem {
     public static ModuleFactory load(String modulePath, Map<String, ClassLoaderBuilder> config) throws ClassNotFoundException {
         return load(modulePath, ModuleFactory.DEFAULT_VERSION, config);
     }
 
-    private static ClassLoaderFinder finder;
+    private static ClassLoaderFactory finder;
     private static ModuleFactory factory;
 
     public static ModuleFactory load(String modulePath, String version, Map<String, ClassLoaderBuilder> config) throws ClassNotFoundException {
-        ClassLoaderFinder finder = new ClassLoaderFinder(config, Module.class.getClassLoader());
-        ModuleClassLoader loader = finder.find(modulePath, version);
+        ClassLoaderFactory finder = new ClassLoaderFactory(config, Module.class.getClassLoader());
+        ModuleClassLoader loader = finder.find(version + ModuleFactory.VERSION_SPLIT + modulePath);
         if(loader == null) {
-            throw new ModuleSystemException("ClassLoaderFinder can not find module's classLoader," + " modulePath: " + modulePath + ", version: " + version);
+            throw new ModuleSystemException("ClassLoaderFactory can not find module's classLoader," + " modulePath: " + modulePath + ", version: " + version);
         }
 
         Class<?> cls = loader.findClass(modulePath);
@@ -39,10 +39,58 @@ public class ModuleSystem {
     // 某些类加载器加载的类中有Module的实现类，这个时候还需要重新创建模块
     // 系统需要提供两个命令，一个是重新加载某个模块或者多个模块，另一个是重新加载某个package
     public static void reloadModule(String modulePath, String version, Map<String, ClassLoaderBuilder> config) throws ClassNotFoundException {
-        ModuleClassLoader loader = finder.find(modulePath, version);
-        Class<?> cls = loader.findClass(modulePath);
-        Class<Module> moduleClass = (Class<Module>) cls;
+        ModuleClassLoader loader = finder.find(version + ModuleFactory.VERSION_SPLIT + modulePath);
+        Set<ModuleClassLoader> reloads = new TreeSet<>();
+        Stack<Iterator<ModuleClassLoader>> stack = new Stack<>();
+        reloads.add(loader);
+        if(!loader.getReloadListeners().isEmpty()) {
+            stack.push(loader.getReloadListeners().iterator());
+            while(true) {
+                Iterator<ModuleClassLoader> it = stack.lastElement();
+                if(it.hasNext()) {
+                    ModuleClassLoader loader1 = it.next();
+                    reloads.add(loader1);
+                    if(loader1.getReloadListeners() == null || loader1.getReloadListeners().isEmpty()) {
+                        continue;
+                    }
+                    stack.push(loader1.getReloadListeners().iterator());
+                }
+                else if(stack.size() > 1) {
+                    stack.pop();
+                }
+                else {
+                    break;
+                }
+            }
+        }
 
-        ModuleInfo moduleInfo = factory.getModuleInfo(moduleClass);
+        ClassLoaderFactoryChain newFinder = new ClassLoaderFactoryChain(config, finder, reloads);
+        newFinder.reBuildClassLoaders();
+        Map<String, List<String>> names = new TreeMap<>();
+        for(ModuleClassLoader classLoader: reloads) {
+            String name = classLoader.getName();
+            List<String> moduleClassList = names.get(name);
+            if(moduleClassList == null) {
+               moduleClassList = new ArrayList<>();
+               names.put(name, moduleClassList);
+            }
+
+            for(Class<? extends Module> cls1: classLoader.getModuleClassList()) {
+                moduleClassList.add(cls1.getName());
+            }
+        }
+
+        ModuleFactoryChain newFactory = new ModuleFactoryChain(factory, reloads);
+        Map<String, ModuleClassLoader> classLoaderMap = newFinder.getAllModuleClassLoader();
+        for(Map.Entry<String, List<String>> name: names.entrySet()) {
+            ModuleClassLoader classLoader = classLoaderMap.get(name.getKey());
+
+            for(String moduleClassName: name.getValue()) {
+                Class<? extends Module> moduleClass = (Class<? extends Module>)classLoader.loadClass(moduleClassName);
+                newFactory.getModuleInfo(moduleClass);
+            }
+        }
+        newFinder.merge();
+        newFactory.resetFactory();
     }
 }

@@ -21,6 +21,7 @@ import java.util.TreeMap;
 // TODO 编写模块重新加载的方法
 public class ModuleFactory {
     public static final String DEFAULT_VERSION = "default";
+    public static final String VERSION_SPLIT = ":";
 
     private Map<String, ModuleInfo> moduleInfoMap = new TreeMap<>();
 
@@ -31,7 +32,7 @@ public class ModuleFactory {
         if(version != null) {
             v = version.value();
         }
-        return name + ":" + v;
+        return v + VERSION_SPLIT + name;
     }
 
     public ModuleInfo getModuleInfo(Class<? extends Module> moduleClass) {
