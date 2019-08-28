@@ -39,6 +39,10 @@ public class ModuleSystem {
     // 某些类加载器加载的类中有Module的实现类，这个时候还需要重新创建模块
     // 系统需要提供两个命令，一个是重新加载某个模块或者多个模块，另一个是重新加载某个package
     public static void reloadModule(String modulePath, String version, Map<String, ClassLoaderBuilder> config) throws ClassNotFoundException {
+        if(!factory.isLoaded()) {
+            return;
+        }
+
         ModuleClassLoader loader = finder.find(version + ModuleFactory.VERSION_SPLIT + modulePath);
         Set<ModuleClassLoader> reloads = new TreeSet<>();
         Stack<Iterator<ModuleClassLoader>> stack = new Stack<>();
@@ -91,6 +95,6 @@ public class ModuleSystem {
             }
         }
         newFinder.merge();
-        newFactory.resetFactory();
+        newFactory.merge();
     }
 }

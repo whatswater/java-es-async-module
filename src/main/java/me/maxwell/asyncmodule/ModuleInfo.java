@@ -12,18 +12,14 @@ public class ModuleInfo {
         try {
             this.factory = factory;
             this.moduleInstance = moduleClass.newInstance();
-            this.moduleState = ModuleState.INSTANCE;
+            this.moduleState = ModuleState.LOADING;
+            this.moduleInstance.register(this);
         } catch(InstantiationException | IllegalAccessException e) {
             throw new InstanceModuleException(
                 "instance module failed, the module class: " + moduleClass.getName(),
                 e
             );
         }
-    }
-
-    protected void registerModule() {
-        this.moduleInstance.register(this);
-        this.moduleState = ModuleState.LOADING;
     }
 
     public final void require(
@@ -84,6 +80,7 @@ public class ModuleInfo {
         }
     }
 
+    @SuppressWarnings("unchecked")
     public <T> T getModuleExport(Class<? extends Module> cls, String name) {
         return (T)factory.getExport(cls, name);
     }
@@ -96,8 +93,12 @@ public class ModuleInfo {
         return moduleListenerList.getModuleExport();
     }
 
-    public void setModuleLoaded() {
-        moduleState = ModuleState.RUNNING;
+    void setModuleState(ModuleState moduleState) {
+        this.moduleState = moduleState;
+    }
+
+    public synchronized void setModuleLoaded() {
+        factory.setModuleLoaded(moduleInstance.getClass());
         for(Map.Entry<String, ModuleListenerList> entry: exports.entrySet()) {
             if(entry.getValue().getModuleExport() != null) {
                 continue;
@@ -117,6 +118,10 @@ public class ModuleInfo {
 
     public ModuleState getModuleState() {
         return moduleState;
+    }
+
+    ModuleListenerList getListenerList(String name) {
+        return this.exports.get(name);
     }
 
     public void setFactory(ModuleFactory factory) {

@@ -5,6 +5,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class ClassLoaderFactory {
     private final Map<String, ModuleClassLoader> classLoaderHolder;
+    private final Map<String, Object> lockMap;
     private Map<String, ClassLoaderBuilder> config;
     private final ClassLoader parent;
 
@@ -14,6 +15,7 @@ public class ClassLoaderFactory {
     ) {
         this.config = config;
         this.classLoaderHolder = new ConcurrentHashMap<>();
+        this.lockMap = new ConcurrentHashMap<>();
         this.parent = parent;
     }
 
@@ -34,7 +36,7 @@ public class ClassLoaderFactory {
         String cacheKey = builder.getCacheKey(name);
         ModuleClassLoader classLoader = getModuleClassLoader(cacheKey);
         if(classLoader == null) {
-            synchronized(classLoaderHolder) {
+            synchronized(getLock(cacheKey)) {
                 classLoader = getModuleClassLoader(cacheKey);
                 if(classLoader == null) {
                     classLoader = builder.createClassLoader(this, parent, cacheKey);
@@ -82,5 +84,14 @@ public class ClassLoaderFactory {
 
     public Map<String, ModuleClassLoader> getAllModuleClassLoader() {
         return this.classLoaderHolder;
+    }
+
+    protected Object getLock(String modulePath) {
+        Object newLock = new Object();
+        Object lock = lockMap.putIfAbsent(modulePath, newLock);
+        if (lock == null) {
+            lock = newLock;
+        }
+        return lock;
     }
 }
