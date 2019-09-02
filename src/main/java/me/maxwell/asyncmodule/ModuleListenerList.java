@@ -2,10 +2,10 @@ package me.maxwell.asyncmodule;
 
 import lombok.Data;
 
-import java.util.List;
+import java.util.Set;
 
 @Data
 public class ModuleListenerList {
     private Object moduleExport;
-    private List<Module> moduleList;
+    private Set<ModuleInfo> moduleInfoSet;
 }

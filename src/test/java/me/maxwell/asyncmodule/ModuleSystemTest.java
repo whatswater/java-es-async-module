@@ -39,21 +39,22 @@ public class ModuleSystemTest {
 
     public static class DataSource implements Module {
         private String url;
+        private static final Symbol<String> NAME_URL = new Symbol<>("url");
 
         @Override
         public void register(ModuleInfo moduleInfo) {
             assertTrue(getClass().getClassLoader() instanceof ModuleClassLoader);
             String moduleName = moduleInfo.getFactory().getModuleName(moduleInfo.getModuleClass());
             assertEquals("default:me.maxwell.asyncmodule.ModuleSystemTest$DataSource", moduleName);
-            moduleInfo.require(Config.class, "url");
+            moduleInfo.require(Config.class, NAME_URL.getKey());
         }
 
         @Override
-        public void onRequireResolved(ModuleInfo moduleInfo, Class<? extends Module> moduleClass, String name) {
+        public void onRequireResolved(ModuleInfo moduleInfo, ModuleInfo rModuleInfo, String name) {
             String moduleName = moduleInfo.getFactory().getModuleName(moduleInfo.getModuleClass());
             assertEquals("default:me.maxwell.asyncmodule.ModuleSystemTest$DataSource", moduleName);
 
-            url = moduleInfo.getModuleExport(moduleClass, name);
+            url = rModuleInfo.getExport(NAME_URL);
             moduleInfo.export(this);
             moduleInfo.setModuleLoaded();
         }
@@ -71,6 +72,7 @@ public class ModuleSystemTest {
 
     public static class ArticleService implements Module {
         private Map<String, Article> data;
+        private static final Symbol<DataSource> NAME_DataSource = new Symbol<>(ModuleFactory.DEFAULT_NAME);
 
         @Override
         public void register(ModuleInfo moduleInfo) {
@@ -83,12 +85,11 @@ public class ModuleSystemTest {
         }
 
         @Override
-        public void onRequireResolved(ModuleInfo moduleInfo, Class<? extends Module> moduleClass, String name) {
+        public void onRequireResolved(ModuleInfo moduleInfo, ModuleInfo rModuleInfo, String name) {
             String moduleName = moduleInfo.getFactory().getModuleName(moduleInfo.getModuleClass());
             assertEquals("default:me.maxwell.asyncmodule.ModuleSystemTest$ArticleService", moduleName);
 
-            DataSource dataSource = moduleInfo.getModuleExport(moduleClass, name);
-
+            DataSource dataSource = rModuleInfo.getExport(NAME_DataSource);
             Article article = new Article();
             article.id = "1";
             article.content = "4567";
@@ -116,6 +117,8 @@ public class ModuleSystemTest {
 
     public static class TestModule implements Module {
         ArticleService articleService;
+        private static final Symbol<ArticleService> NAME_ArticleService = new Symbol<>(ModuleFactory.DEFAULT_NAME);
+        private static final Symbol<Integer> NAME_MAX_INTEGER = new Symbol<>("MAX_INT_VALUE");
 
         @Override
         public void register(ModuleInfo moduleInfo) {
@@ -129,19 +132,19 @@ public class ModuleSystemTest {
         }
 
         @Override
-        public void onRequireResolved(ModuleInfo moduleInfo, Class<? extends Module> moduleClass, String name) {
+        public void onRequireResolved(ModuleInfo moduleInfo, ModuleInfo rModuleInfo, String name) {
             String moduleName = moduleInfo.getFactory().getModuleName(moduleInfo.getModuleClass());
             assertEquals("default:me.maxwell.asyncmodule.ModuleSystemTest$TestModule", moduleName);
 
             if("default".equals(name)) {
-                articleService = moduleInfo.getModuleExport(moduleClass, name);
+                articleService = rModuleInfo.getExport(NAME_ArticleService);
                 Article article = articleService.getArticle("1");
                 assertTrue(article != null);
                 assertTrue("1".equals(article.id));
                 assertTrue("jdbc:postgresql://localhost:5236/document".equals(article.url));
             }
             else if("MAX_INT_VALUE".equals(name)) {
-                Integer maxIntValue = moduleInfo.getModuleExport(moduleClass, name);
+                Integer maxIntValue = rModuleInfo.getExport(NAME_MAX_INTEGER);
                 assertTrue(Integer.MAX_VALUE == maxIntValue.intValue());
             }
 
@@ -151,13 +154,10 @@ public class ModuleSystemTest {
         }
 
         @Override
-        public void onMissRequire(ModuleInfo moduleInfo, Class<? extends Module> moduleClass, String name) {
+        public void onRequireMissed(ModuleInfo moduleInfo, ModuleInfo rModuleInfo, String name) {
             String moduleName = moduleInfo.getFactory().getModuleName(moduleInfo.getModuleClass());
             assertEquals("default:me.maxwell.asyncmodule.ModuleSystemTest$TestModule", moduleName);
-
-            String requiredModuleName = moduleInfo.getFactory().getModuleName(moduleClass);
-            assertEquals("default:me.maxwell.asyncmodule.ModuleSystemTest$ArticleService", requiredModuleName);
-
+            assertEquals("default:me.maxwell.asyncmodule.ModuleSystemTest$ArticleService", rModuleInfo.getModuleName());
             assertEquals("MissRequire", name);
         }
     }

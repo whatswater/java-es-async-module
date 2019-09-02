@@ -1,6 +1,7 @@
 package me.maxwell.asyncmodule;
 
 import java.util.*;
+import java.util.function.Function;
 
 public class ModuleSystem {
     public static ModuleFactory load(String modulePath, Map<String, ClassLoaderBuilder> config) throws ClassNotFoundException {
@@ -73,18 +74,32 @@ public class ModuleSystem {
         Map<String, List<String>> names = new TreeMap<>();
         for(ModuleClassLoader classLoader: reloads) {
             String name = classLoader.getName();
-            List<String> moduleClassList = names.get(name);
-            if(moduleClassList == null) {
-               moduleClassList = new ArrayList<>();
-               names.put(name, moduleClassList);
-            }
 
+            List<String> moduleClassList = names.computeIfAbsent(name, new Function<String, List<String>>() {
+                @Override
+                public List<String> apply(String name) {
+                    return  new ArrayList<>();
+                }
+            });
             for(Class<? extends Module> cls1: classLoader.getModuleClassList()) {
                 moduleClassList.add(cls1.getName());
             }
         }
+        newFinder.merge();
 
-        ModuleFactoryChain newFactory = new ModuleFactoryChain(factory, reloads);
+        ModuleFactoryChain newFactory = new ModuleFactoryChain(factory, reloads, new ModuleLoadedListener() {
+            @Override
+            public void onModuleLoaded(ModuleInfo moduleInfo, ModuleFactory factory) {
+
+            }
+
+            @Override
+            public void onAllModuleLoaded(ModuleFactory factory) {
+                if(factory instanceof ModuleFactoryChain) {
+                    ((ModuleFactoryChain) factory).merge();
+                }
+            }
+        });
         Map<String, ModuleClassLoader> classLoaderMap = newFinder.getAllModuleClassLoader();
         for(Map.Entry<String, List<String>> name: names.entrySet()) {
             ModuleClassLoader classLoader = classLoaderMap.get(name.getKey());
@@ -94,7 +109,5 @@ public class ModuleSystem {
                 newFactory.getModuleInfo(moduleClass);
             }
         }
-        newFinder.merge();
-        newFactory.merge();
     }
 }

@@ -4,16 +4,16 @@ import java.util.Set;
 import java.util.TreeSet;
 
 public class Require {
-    private final Module module;
+    private final ModuleInfo moduleInfo;
     private Set<String> requireNames;
 
-    public Require(Module module, String ...names) {
+    public Require(ModuleInfo moduleInfo, String ...names) {
         requireNames = new TreeSet<>();
         for(String name: names) {
             requireNames.add(name);
         }
 
-        this.module = module;
+        this.moduleInfo = moduleInfo;
     }
 
     public void addRequire(String name) {
@@ -32,8 +32,8 @@ public class Require {
         requireNames.removeAll(names);
     }
 
-    public Module getModule() {
-        return module;
+    public ModuleInfo getModuleInfo() {
+        return moduleInfo;
     }
 
     public Set<String> getRequireNames() {
