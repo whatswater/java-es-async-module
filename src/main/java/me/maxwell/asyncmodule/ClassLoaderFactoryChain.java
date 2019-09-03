@@ -1,6 +1,7 @@
 package me.maxwell.asyncmodule;
 
 import java.util.*;
+import java.util.function.Function;
 
 public class ClassLoaderFactoryChain extends ClassLoaderFactory {
     private ClassLoaderFactory next;
@@ -32,17 +33,18 @@ public class ClassLoaderFactoryChain extends ClassLoaderFactory {
 
         config = next.getConfig();
         for(Map.Entry<String, ClassLoaderBuilder> entry: config.entrySet()) {
-            ClassLoaderBuilder builder = entry.getValue();
+            final ClassLoaderBuilder builder = entry.getValue();
             String cacheKey = builder.getCacheKey(entry.getKey());
 
-            BuilderAndConfigNames builderAndConfigNames = cacheKey2Builder.get(cacheKey);
-            if(builderAndConfigNames == null) {
-                builderAndConfigNames = new BuilderAndConfigNames();
-                builderAndConfigNames.builder = builder;
-                builderAndConfigNames.configNames = new ArrayList<>();
-                cacheKey2Builder.put(cacheKey, builderAndConfigNames);
-            }
-            builderAndConfigNames.configNames.add(entry.getKey());
+            cacheKey2Builder.computeIfAbsent(cacheKey, new Function<String, BuilderAndConfigNames>() {
+                @Override
+                public BuilderAndConfigNames apply(String key) {
+                    BuilderAndConfigNames builderAndConfigNames = new BuilderAndConfigNames();
+                    builderAndConfigNames.builder = builder;
+                    builderAndConfigNames.configNames = new ArrayList<>();
+                    return builderAndConfigNames;
+                }
+            }).configNames.add(entry.getKey());
         }
 
         config = getConfig();

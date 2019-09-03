@@ -64,6 +64,14 @@ public class ClassLoaderFactory {
         return classLoader;
     }
 
+    public Class<?> loadClass(String loaderFinderName, String className) throws ClassNotFoundException {
+        ModuleClassLoader classLoader = find(loaderFinderName);
+        if(classLoader == null) {
+            throw new ModuleSystemException("ClassLoaderFactory can not find module's classLoader," + " modulePath: " + loaderFinderName);
+        }
+        return classLoader.findClass(className);
+    }
+
     public ClassLoader getParent() {
         return parent;
     }

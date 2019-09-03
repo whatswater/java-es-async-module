@@ -12,7 +12,7 @@ public class ModuleFactoryChain extends ModuleFactory {
         super(listener);
         this.innerFactory = factory;
         this.classLoaders = filter;
-        this.moduleInfoList = new ArrayList<>();
+        this.moduleInfoList = new LinkedList<>();
     }
 
     @Override
@@ -24,8 +24,6 @@ public class ModuleFactoryChain extends ModuleFactory {
         // 如果有新的模块加载，也在此工厂加载，以免工厂事件重复调用
         if(moduleInfo == null || classLoaders.contains(classLoader)) {
             ModuleInfo newModuleInfo = super.getModuleInfo(moduleClass);
-
-            // 优化性能，改成并发的链表，且能一次add多条数据
             synchronized(lock) {
                 moduleInfoList.add(moduleInfo);
                 moduleInfoList.add(newModuleInfo);
@@ -39,7 +37,7 @@ public class ModuleFactoryChain extends ModuleFactory {
     }
 
     @Override
-    public void require(Class<? extends Module> moduleClass, Require require) {
+    public ModuleInfo require(Class<? extends Module> moduleClass, Require require) {
         String moduleName = getModuleName(moduleClass);
         ModuleInfo moduleInfo = innerFactory.findModuleInfo(moduleName);
         ModuleClassLoader classLoader = (ModuleClassLoader)moduleClass.getClassLoader();
@@ -47,20 +45,29 @@ public class ModuleFactoryChain extends ModuleFactory {
         if(moduleInfo == null || classLoaders.contains(classLoader)) {
             ModuleInfo newModuleInfo = super.getModuleInfo(moduleClass);
             newModuleInfo.addDependency(require);
+            return newModuleInfo;
         }
         else {
             moduleInfo.addDependency(require);
+            return moduleInfo;
         }
     }
 
-    // TODO 校验merge方法逻辑和线程安全问题
+    /**
+     * 合并两个ModuleFactory，此方法是线程不安全的
+     */
     public void merge() {
-        Set<ModuleInfo> moduleNames = new HashSet<>();
+        Set<String> moduleNames = new HashSet<>();
         for(int i = 0; i < moduleInfoList.size(); i = i + 2) {
-            if(moduleInfoList.get(i) != null) {
-                moduleNames.add(moduleInfoList.get(i));
+            ModuleInfo moduleInfo = moduleInfoList.get(i);
+            if(moduleInfo != null) {
+                moduleNames.add(moduleInfo.getModuleName());
+                if(i % 2 == 1) {
+                    moduleInfo.setFactory(innerFactory);
+                }
             }
         }
+        innerFactory.getModuleInfoMap().putAll(getModuleInfoMap());
 
         for(int i = 0; i < moduleInfoList.size(); i = i + 2) {
             ModuleInfo oldModuleInfo = moduleInfoList.get(i);
@@ -70,45 +77,42 @@ public class ModuleFactoryChain extends ModuleFactory {
             ModuleInfo newModuleInfo  = moduleInfoList.get(i + 1);
 
             // 从ListenerList中删除老的
-            Map<Class<? extends Module>, Set<String>> requires = oldModuleInfo.getRequires();
-            for(Map.Entry<Class<? extends Module>, Set<String>> entry: requires.entrySet()) {
-                ModuleInfo required = innerFactory.getModuleInfo(entry.getKey());
-                if(!moduleNames.contains(required)) {
-                    for(String requireName: entry.getValue()) {
-                        ModuleListenerList listenerList = required.getExports().get(requireName);
-                        listenerList.getModuleInfoSet().remove(oldModuleInfo);
-                    }
+            Map<String, Set<String>> requires = oldModuleInfo.getRequires();
+            for(Map.Entry<String, Set<String>> entry: requires.entrySet()) {
+                String moduleName = entry.getKey();
+                // 只有不在重新加载范围内的才需要去除监听
+                if(moduleNames.contains(moduleName)) {
+                    continue;
+                }
+
+                ModuleInfo required = innerFactory.findModuleInfo(moduleName);
+                for(String requireName: entry.getValue()) {
+                    ModuleListenerList listenerList = required.getExports().get(requireName);
+                    listenerList.getModuleInfoSet().remove(oldModuleInfo);
                 }
             }
 
             // 向新加载的模块添加观察者，并且调用观察者的重新加载方法
             Map<String, ModuleListenerList> oldExports = oldModuleInfo.getExports();
-            Map<String, ModuleListenerList> newExports = newModuleInfo.getExports();
             for(Map.Entry<String, ModuleListenerList> entry: oldExports.entrySet()) {
-                if(entry.getValue().getModuleInfoSet() == null) {
-                    continue;
-                }
                 for(ModuleInfo moduleInfo: entry.getValue().getModuleInfoSet()) {
-                    if(moduleNames.contains(moduleInfo)) {
+                    if(moduleNames.contains(moduleInfo.getModuleName())) {
                         continue;
                     }
+                    String requireName = entry.getKey();
+                    Map<String, ModuleListenerList> newExports = newModuleInfo.getExports();
+                    ModuleListenerList listenerList = newExports.get(requireName);
 
-                    ModuleListenerList listenerList = newExports.get(entry.getKey());
+                    // 当重新加载的模块被其他模块依赖而又没有满足时，listenerList不为null但是moduleExport为null
                     if(listenerList == null || listenerList.getModuleExport() == null) {
-                        moduleInfo.getModuleInstance().onReloadRequireMissed(newModuleInfo, newModuleInfo, entry.getKey());
+                        moduleInfo.getModuleInstance().onReloadRequireMissed(moduleInfo, newModuleInfo, requireName);
                     }
                     else {
-                        moduleInfo.getModuleInstance().onReloadRequireResolved(newModuleInfo, newModuleInfo, entry.getKey());
                         listenerList.getModuleInfoSet().add(moduleInfo);
+                        moduleInfo.getModuleInstance().onReloadRequireMissed(moduleInfo, newModuleInfo, requireName);
                     }
                 }
             }
         }
-
-        Map<String, ModuleInfo> moduleInfoMap = getModuleInfoMap();
-        for(Map.Entry<String, ModuleInfo> moduleInfoEntry: moduleInfoMap.entrySet()) {
-            moduleInfoEntry.getValue().setFactory(innerFactory);
-        }
-        innerFactory.getModuleInfoMap().putAll(moduleInfoMap);
     }
 }

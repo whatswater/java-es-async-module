@@ -17,7 +17,7 @@ public class ModuleSystemTest {
         public void register(ModuleInfo moduleInfo) {
             configLoader = getClass().getClassLoader();
             assertTrue(configLoader instanceof ModuleClassLoader);
-            String moduleName = moduleInfo.getFactory().getModuleName(moduleInfo.getModuleClass());
+            String moduleName = moduleInfo.getModuleName();
             assertEquals("default:me.maxwell.asyncmodule.ModuleSystemTest$Config", moduleName);
 
             moduleInfo.export("url", "jdbc:postgresql://localhost:5236/document");
@@ -44,14 +44,14 @@ public class ModuleSystemTest {
         @Override
         public void register(ModuleInfo moduleInfo) {
             assertTrue(getClass().getClassLoader() instanceof ModuleClassLoader);
-            String moduleName = moduleInfo.getFactory().getModuleName(moduleInfo.getModuleClass());
+            String moduleName = moduleInfo.getModuleName();
             assertEquals("default:me.maxwell.asyncmodule.ModuleSystemTest$DataSource", moduleName);
             moduleInfo.require(Config.class, NAME_URL.getKey());
         }
 
         @Override
         public void onRequireResolved(ModuleInfo moduleInfo, ModuleInfo rModuleInfo, String name) {
-            String moduleName = moduleInfo.getFactory().getModuleName(moduleInfo.getModuleClass());
+            String moduleName = moduleInfo.getModuleName();
             assertEquals("default:me.maxwell.asyncmodule.ModuleSystemTest$DataSource", moduleName);
 
             url = rModuleInfo.getExport(NAME_URL);
@@ -79,14 +79,14 @@ public class ModuleSystemTest {
             serviceLoader = getClass().getClassLoader();
             assertTrue(serviceLoader instanceof ModuleClassLoader);
 
-            String moduleName = moduleInfo.getFactory().getModuleName(moduleInfo.getModuleClass());
+            String moduleName = moduleInfo.getModuleName();
             assertEquals("default:me.maxwell.asyncmodule.ModuleSystemTest$ArticleService", moduleName);
             moduleInfo.require(DataSource.class);
         }
 
         @Override
         public void onRequireResolved(ModuleInfo moduleInfo, ModuleInfo rModuleInfo, String name) {
-            String moduleName = moduleInfo.getFactory().getModuleName(moduleInfo.getModuleClass());
+            String moduleName = moduleInfo.getModuleName();
             assertEquals("default:me.maxwell.asyncmodule.ModuleSystemTest$ArticleService", moduleName);
 
             DataSource dataSource = rModuleInfo.getExport(NAME_DataSource);
@@ -125,7 +125,7 @@ public class ModuleSystemTest {
             testModuleLoader = getClass().getClassLoader();
             assertTrue(testModuleLoader instanceof ModuleClassLoader);
 
-            String moduleName = moduleInfo.getFactory().getModuleName(moduleInfo.getModuleClass());
+            String moduleName = moduleInfo.getModuleName();
             assertEquals("default:me.maxwell.asyncmodule.ModuleSystemTest$TestModule", moduleName);
             moduleInfo.require(ArticleService.class);
             moduleInfo.require(ArticleService.class, "MissRequire");
@@ -133,7 +133,7 @@ public class ModuleSystemTest {
 
         @Override
         public void onRequireResolved(ModuleInfo moduleInfo, ModuleInfo rModuleInfo, String name) {
-            String moduleName = moduleInfo.getFactory().getModuleName(moduleInfo.getModuleClass());
+            String moduleName = moduleInfo.getModuleName();
             assertEquals("default:me.maxwell.asyncmodule.ModuleSystemTest$TestModule", moduleName);
 
             if("default".equals(name)) {
@@ -155,7 +155,7 @@ public class ModuleSystemTest {
 
         @Override
         public void onRequireMissed(ModuleInfo moduleInfo, ModuleInfo rModuleInfo, String name) {
-            String moduleName = moduleInfo.getFactory().getModuleName(moduleInfo.getModuleClass());
+            String moduleName = moduleInfo.getModuleName();
             assertEquals("default:me.maxwell.asyncmodule.ModuleSystemTest$TestModule", moduleName);
             assertEquals("default:me.maxwell.asyncmodule.ModuleSystemTest$ArticleService", rModuleInfo.getModuleName());
             assertEquals("MissRequire", name);
@@ -190,20 +190,36 @@ public class ModuleSystemTest {
         ClassLoaderBuilder builder = ClassLoaderBuilder.builder();
         ClassLoaderBuilder innerClassBuilder = new InnerLoader();
 
+        ModuleSystem moduleSystem = new ModuleSystem();
+
         config.put("default:me.maxwell.asyncmodule.ModuleSystemTest$Config", innerClassBuilder);
         config.put("default:me.maxwell.asyncmodule.ModuleSystemTest$DataSource", innerClassBuilder);
         config.put("default:me.maxwell.asyncmodule.ModuleSystemTest$ArticleService", innerClassBuilder);
         config.put("default:me.maxwell.asyncmodule.ModuleSystemTest$TestModule", builder);
-        ModuleSystem.load("me.maxwell.asyncmodule.ModuleSystemTest$TestModule", config);
+        moduleSystem.load("me.maxwell.asyncmodule.ModuleSystemTest$TestModule", config);
 
         assertTrue(serviceLoader == configLoader);
         assertTrue(serviceLoader != testModuleLoader);
 
+        int count = 0;
+        while(true) {
+            count++;
+            if(moduleSystem.getModuleFactory().isLoaded()) {
+                moduleSystem.reloadModule(
+                        "me.maxwell.asyncmodule.ModuleSystemTest$ArticleService",
+                        "default",
+                        new TreeMap<>()
+                );
+                break;
+            }
+            try {
+                Thread.sleep(1000);
+            } catch(InterruptedException e) {
+            }
 
-        ModuleSystem.reloadModule(
-                "me.maxwell.asyncmodule.ModuleSystemTest$ArticleService",
-                "default",
-                new TreeMap<>()
-        );
+            if(count > 20) {
+                throw new RuntimeException("???");
+            }
+        }
     }
 }

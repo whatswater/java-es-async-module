@@ -4,32 +4,39 @@ import java.util.*;
 import java.util.function.Function;
 
 public class ModuleSystem {
-    public static ModuleFactory load(String modulePath, Map<String, ClassLoaderBuilder> config) throws ClassNotFoundException {
+    public ModuleFactory load(String modulePath, Map<String, ClassLoaderBuilder> config) throws ClassNotFoundException {
         return load(modulePath, ModuleFactory.DEFAULT_VERSION, config);
     }
 
-    private static ClassLoaderFactory finder;
-    private static ModuleFactory factory;
+    private ClassLoaderFactory classLoaderFactory;
+    private ModuleFactory moduleFactory;
 
-    public static ModuleFactory load(String modulePath, String version, Map<String, ClassLoaderBuilder> config) throws ClassNotFoundException {
-        ClassLoaderFactory finder = new ClassLoaderFactory(config, Module.class.getClassLoader());
-        ModuleClassLoader loader = finder.find(version + ModuleFactory.VERSION_SPLIT + modulePath);
-        if(loader == null) {
-            throw new ModuleSystemException("ClassLoaderFactory can not find module's classLoader," + " modulePath: " + modulePath + ", version: " + version);
-        }
-
-        Class<?> cls = loader.findClass(modulePath);
+    public ModuleFactory load(String className, String version, Map<String, ClassLoaderBuilder> config) throws ClassNotFoundException {
+        ClassLoaderFactory classLoaderFactory = new ClassLoaderFactory(config, Module.class.getClassLoader());
+        String loaderName = version + ModuleFactory.VERSION_SPLIT + className;
+        Class<?> cls = classLoaderFactory.loadClass(loaderName, className);
         if(!Module.class.isAssignableFrom(cls)) {
             throw new ModuleSystemException("The cls: " + cls.getName() + " must implements Module Interface when loading");
         }
 
-        Class<Module> moduleClass = (Class<Module>) cls;
-        ModuleFactory factory = new ModuleFactory();
-        factory.getModuleInfo(moduleClass);
-        ModuleSystem.finder = finder;
-        ModuleSystem.factory = factory;
+        Class<? extends Module> moduleClass = (Class<? extends Module>) cls;
+        ModuleFactory moduleFactory = new ModuleFactory(new ModuleLoadedListener() {
+            @Override
+            public void onModuleLoaded(ModuleInfo moduleInfo, ModuleFactory factory) {
+                System.out.println(moduleInfo.getModuleName() + " loaded");
+            }
 
-        return factory;
+            @Override
+            public void onAllModuleLoaded(ModuleFactory factory) {
+                System.out.println("moduleFactory loaded");
+            }
+        });
+        moduleFactory.getModuleInfo(moduleClass);
+
+        this.classLoaderFactory = classLoaderFactory;
+        this.moduleFactory = moduleFactory;
+
+        return moduleFactory;
     }
 
     // 实现重新加载功能
@@ -39,12 +46,12 @@ public class ModuleSystem {
     // 所以类加载器需要记录依赖关系，当某个类加载器重新加载后，重新实例化新的类加载器加载其他的类
     // 某些类加载器加载的类中有Module的实现类，这个时候还需要重新创建模块
     // 系统需要提供两个命令，一个是重新加载某个模块或者多个模块，另一个是重新加载某个package
-    public static void reloadModule(String modulePath, String version, Map<String, ClassLoaderBuilder> config) throws ClassNotFoundException {
-        if(!factory.isLoaded()) {
+    public void reloadModule(String modulePath, String version, Map<String, ClassLoaderBuilder> config) throws ClassNotFoundException {
+        if(!moduleFactory.isLoaded()) {
             return;
         }
 
-        ModuleClassLoader loader = finder.find(version + ModuleFactory.VERSION_SPLIT + modulePath);
+        ModuleClassLoader loader = classLoaderFactory.find(version + ModuleFactory.VERSION_SPLIT + modulePath);
         Set<ModuleClassLoader> reloads = new TreeSet<>();
         Stack<Iterator<ModuleClassLoader>> stack = new Stack<>();
         reloads.add(loader);
@@ -69,7 +76,7 @@ public class ModuleSystem {
             }
         }
 
-        ClassLoaderFactoryChain newFinder = new ClassLoaderFactoryChain(config, finder, reloads);
+        ClassLoaderFactoryChain newFinder = new ClassLoaderFactoryChain(config, classLoaderFactory, reloads);
         newFinder.reBuildClassLoaders();
         Map<String, List<String>> names = new TreeMap<>();
         for(ModuleClassLoader classLoader: reloads) {
@@ -87,10 +94,10 @@ public class ModuleSystem {
         }
         newFinder.merge();
 
-        ModuleFactoryChain newFactory = new ModuleFactoryChain(factory, reloads, new ModuleLoadedListener() {
+        ModuleFactoryChain newFactory = new ModuleFactoryChain(moduleFactory, reloads, new ModuleLoadedListener() {
             @Override
             public void onModuleLoaded(ModuleInfo moduleInfo, ModuleFactory factory) {
-
+                System.out.println(moduleInfo.getModuleName() + " loaded");
             }
 
             @Override
@@ -100,14 +107,16 @@ public class ModuleSystem {
                 }
             }
         });
-        Map<String, ModuleClassLoader> classLoaderMap = newFinder.getAllModuleClassLoader();
         for(Map.Entry<String, List<String>> name: names.entrySet()) {
-            ModuleClassLoader classLoader = classLoaderMap.get(name.getKey());
-
             for(String moduleClassName: name.getValue()) {
-                Class<? extends Module> moduleClass = (Class<? extends Module>)classLoader.loadClass(moduleClassName);
+                ModuleClassLoader classLoader = newFinder.getModuleClassLoader(name.getKey());
+                Class<? extends Module> moduleClass = (Class<? extends Module>)classLoader.findClass(moduleClassName);
                 newFactory.getModuleInfo(moduleClass);
             }
         }
+    }
+
+    public ModuleFactory getModuleFactory() {
+        return this.moduleFactory;
     }
 }

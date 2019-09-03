@@ -7,14 +7,14 @@ public class ModuleInfo {
     private String moduleName;
     private Module moduleInstance;
     private Map<String, ModuleListenerList> exports = new TreeMap<>();
-    private Map<Class<? extends Module>, Set<String>> requires = new HashMap<>();
-    ModuleState moduleState;
+    private Map<String, Set<String>> requires = new HashMap<>();
+    volatile ModuleState moduleState;
     private ModuleFactory factory;
 
-    ModuleInfo(Class<? extends Module> moduleClass, ModuleFactory factory) {
+    ModuleInfo(Class<? extends Module> moduleClass, String moduleName, ModuleFactory factory) {
         try {
             this.factory = factory;
-            this.moduleName = factory.getModuleName(moduleClass);
+            this.moduleName = moduleName;
             this.moduleInstance = moduleClass.newInstance();
             this.moduleState = ModuleState.INSTANCE;
         } catch(InstantiationException | IllegalAccessException e) {
@@ -36,14 +36,14 @@ public class ModuleInfo {
             String... moduleNames
     ) {
         Require require = new Require(this, moduleNames);
-        factory.require(moduleClass, require);
-        addRequire(moduleClass, require);
+        ModuleInfo moduleInfo = factory.require(moduleClass, require);
+        addRequire(moduleInfo.getModuleName(), require);
     }
 
-    private synchronized void addRequire(Class<? extends Module> moduleClass, Require newRequire) {
-        Set<String> names = requires.computeIfAbsent(moduleClass, new Function<Class<? extends Module>, Set<String>>() {
+    private synchronized void addRequire(String moduleName, Require newRequire) {
+        Set<String> names = requires.computeIfAbsent(moduleName, new Function<String, Set<String>>() {
             @Override
-            public Set<String> apply(Class<? extends Module> cls) {
+            public Set<String> apply(String moduleName) {
                 return new TreeSet<>();
             }
         });
@@ -64,11 +64,6 @@ public class ModuleInfo {
             exports.put(name, moduleListenerList);
         }
         Set<ModuleInfo> moduleInfoSet = moduleListenerList.getModuleInfoSet();
-        if(moduleInfoSet == null) {
-            moduleInfoSet = new HashSet<>();
-            moduleListenerList.setModuleInfoSet(moduleInfoSet);
-        }
-
         Module module = moduleInfo.getModuleInstance();
         if(moduleListenerList.getModuleExport() != null) {
             module.onRequireResolved(moduleInfo, this, name);
@@ -88,11 +83,9 @@ public class ModuleInfo {
         }
         moduleListenerList.setModuleExport(obj);
         Set<ModuleInfo> moduleInfoSet = moduleListenerList.getModuleInfoSet();
-        if(moduleInfoSet != null) {
-            for(ModuleInfo moduleInfo: moduleInfoSet) {
-                Module module = moduleInfo.getModuleInstance();
-                module.onRequireResolved(moduleInfo, this, name);
-            }
+        for(ModuleInfo moduleInfo: moduleInfoSet) {
+            Module module = moduleInfo.getModuleInstance();
+            module.onRequireResolved(moduleInfo, this, name);
         }
     }
 
@@ -111,12 +104,10 @@ public class ModuleInfo {
                 continue;
             }
             Set<ModuleInfo> moduleInfoSet = entry.getValue().getModuleInfoSet();
-            if(moduleInfoSet != null) {
-                String name = entry.getKey();
-                for(ModuleInfo moduleInfo: moduleInfoSet) {
-                    Module module = moduleInfo.getModuleInstance();
-                    module.onRequireMissed(moduleInfo, this, name);
-                }
+            String name = entry.getKey();
+            for(ModuleInfo moduleInfo: moduleInfoSet) {
+                Module module = moduleInfo.getModuleInstance();
+                module.onRequireMissed(moduleInfo, this, name);
             }
         }
     }
@@ -137,7 +128,7 @@ public class ModuleInfo {
         return this.exports;
     }
 
-    public Map<Class<? extends Module>, Set<String>> getRequires() {
+    public Map<String, Set<String>> getRequires() {
         return this.requires;
     }
 
