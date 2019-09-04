@@ -140,7 +140,7 @@ public class ModuleSystemTest {
                 articleService = rModuleInfo.getExport(NAME_ArticleService);
                 Article article = articleService.getArticle("1");
                 assertTrue(article != null);
-                assertTrue("1".equals(article.id));
+                System.out.println(article.id);
                 assertTrue("jdbc:postgresql://localhost:5236/document".equals(article.url));
             }
             else if("MAX_INT_VALUE".equals(name)) {
@@ -159,6 +159,17 @@ public class ModuleSystemTest {
             assertEquals("default:me.maxwell.asyncmodule.ModuleSystemTest$TestModule", moduleName);
             assertEquals("default:me.maxwell.asyncmodule.ModuleSystemTest$ArticleService", rModuleInfo.getModuleName());
             assertEquals("MissRequire", name);
+        }
+
+        @Override
+        public void onReloadRequireResolved(ModuleInfo moduleInfo, ModuleInfo rModuleInfo, String name) {
+            if("default".equals(name)) {
+                articleService = rModuleInfo.getExport(NAME_ArticleService);
+                Article article = articleService.getArticle("1");
+                assertTrue(article != null);
+                assertTrue("2".equals(article.id));
+                assertTrue("jdbc:postgresql://localhost:5236/document".equals(article.url));
+            }
         }
     }
 
@@ -204,11 +215,24 @@ public class ModuleSystemTest {
         int count = 0;
         while(true) {
             count++;
+            Map<String, ClassLoaderBuilder> newConfig = new TreeMap<>();
+            newConfig.put("default:me.maxwell.asyncmodule.ModuleSystemTest$ArticleService", new ClassLoaderBuilder() {
+                @Override
+                public ModuleClassLoader createClassLoader(
+                        ClassLoaderFactory classLoaderFactory,
+                        ClassLoader parent,
+                        String cacheKey
+                ) {
+                    ModuleClassLoader classLoader = new OldVersionClassLoader(parent, cacheKey);
+                    classLoader.setFinder(classLoaderFactory);
+                    return classLoader;
+                }
+            });
             if(moduleSystem.getModuleFactory().isLoaded()) {
                 moduleSystem.reloadModule(
                         "me.maxwell.asyncmodule.ModuleSystemTest$ArticleService",
                         "default",
-                        new TreeMap<>()
+                        newConfig
                 );
                 break;
             }
@@ -220,6 +244,11 @@ public class ModuleSystemTest {
             if(count > 20) {
                 throw new RuntimeException("???");
             }
+        }
+
+        try {
+            Thread.sleep(120 * 1000);
+        } catch(InterruptedException e) {
         }
     }
 }

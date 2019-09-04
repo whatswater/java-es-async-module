@@ -1,7 +1,7 @@
 package me.maxwell.asyncmodule;
 
 import java.util.*;
-import java.util.function.Function;
+
 
 public class ClassLoaderFactoryChain extends ClassLoaderFactory {
     private ClassLoaderFactory next;
@@ -26,77 +26,60 @@ public class ClassLoaderFactoryChain extends ClassLoaderFactory {
         this(config, next.getParent(), next, reloads);
     }
 
-    public void reBuildClassLoaders() {
-        Map<String, ClassLoaderBuilder> newConfig = new TreeMap<>();
-        Map<String, BuilderAndConfigNames> cacheKey2Builder = new TreeMap<>();
-        Map<String, ClassLoaderBuilder> config;
-
-        config = next.getConfig();
-        for(Map.Entry<String, ClassLoaderBuilder> entry: config.entrySet()) {
-            final ClassLoaderBuilder builder = entry.getValue();
-            String cacheKey = builder.getCacheKey(entry.getKey());
-
-            cacheKey2Builder.computeIfAbsent(cacheKey, new Function<String, BuilderAndConfigNames>() {
-                @Override
-                public BuilderAndConfigNames apply(String key) {
-                    BuilderAndConfigNames builderAndConfigNames = new BuilderAndConfigNames();
-                    builderAndConfigNames.builder = builder;
-                    builderAndConfigNames.configNames = new ArrayList<>();
-                    return builderAndConfigNames;
-                }
-            }).configNames.add(entry.getKey());
-        }
-
-        config = getConfig();
-        for(Map.Entry<String, ClassLoaderBuilder> entry: config.entrySet()) {
-            ClassLoaderBuilder builder = entry.getValue();
-            String cacheKey = builder.getCacheKey(entry.getKey());
-            BuilderAndConfigNames builderAndConfigNames = cacheKey2Builder.get(cacheKey);
-            if(builderAndConfigNames != null) {
-                for(String configName: builderAndConfigNames.configNames) {
-                    if(!config.containsKey(configName)) {
-                        newConfig.put(configName, builder);
-                    }
-                }
-            }
-
-            builderAndConfigNames = new BuilderAndConfigNames();
-            builderAndConfigNames.builder = builder;
-            cacheKey2Builder.put(cacheKey, builderAndConfigNames);
-        }
-        config.putAll(newConfig);
-
-        for(ModuleClassLoader classLoader: reloads) {
-            String cacheKey = classLoader.getName();
-            ClassLoaderBuilder builder = cacheKey2Builder.get(cacheKey).builder;
-            ModuleClassLoader newClassLoader = builder.createClassLoader(this, getParent(), cacheKey);
-            putModuleClassLoader(cacheKey, newClassLoader);
-        }
-    }
-
     @Override
     public ClassLoaderBuilder getBuilder(String name) {
         Map<String, ClassLoaderBuilder> config = getConfig();
-        if(!config.containsKey(name)) {
-            config = next.getConfig();
-            if(!config.containsKey(name)) {
-                return null;
-            }
+        ClassLoaderBuilder builder = config.get(name);
+        if(builder == null) {
+            builder = next.getConfig().get(name);
+        }
+        return builder;
+    }
+
+    /**
+     * 此方法的基本假设
+     * 1、cacheKey相同的ModuleClassLoader是等效的
+     * 2、通过version+className查找ModuleClassLoaderBuilder时，
+     *    先根据全名在本classLoader查找，如果没有找到然后再next中查找；
+     *    如果还没有找到，那么会根据上一级packageName查找；
+     * 3、找到classLoaderBuilder后，获取cacheKey，然后去next查询，看看next有没有已经实例化好的ClassLoader
+     * 4、如果next实例化好的ClassLoader在重新加载的范围内，那么会重新builder一个
+     * 5、所有新创建的classLoader实例都放在本classLoaderFactory中
+     * 6、当在重新加载范围内的classLoader重新加载时，由于假设一，
+     *    无论builder来自于哪一个工厂，都是等效的
+     * 7、如果next实例化好的ClassLoader不在重新加载的范围内，那么会直接使用next中实例化好的classLoader实例
+     * 8、合并的时候直接合并config，然后将holder和合并即可。
+     * 9、只有执行了find的类找到的类加载器才能生效，所以本工厂中的config可能完全不会生效，但是合并的时候还是会将所有的config和合并到next
+     * @param name version + 类名
+     * @return
+     */
+    @Override
+    public ModuleClassLoader findExact(String name) {
+        ClassLoaderBuilder builder = getBuilder(name);
+        if(builder == null) {
+            return null;
         }
 
-        return config.get(name);
+        String cacheKey = builder.getCacheKey(name);
+        ModuleClassLoader moduleClassLoader = next.getModuleClassLoader(cacheKey);
+        if(moduleClassLoader == null || reloads.contains(moduleClassLoader)) {
+            CreateLoaderFunction function = new CreateLoaderFunction(this, builder);
+            return getAllModuleClassLoader().computeIfAbsent(cacheKey, function);
+        }
+        return moduleClassLoader;
     }
 
     @Override
-    public ModuleClassLoader find(String name) {
-        ModuleClassLoader oldClassLoader = next.find(name);
-
-        if(oldClassLoader != null) {
-            if(!reloads.contains(oldClassLoader)) {
-                return oldClassLoader;
-            }
+    public ModuleClassLoader getModuleClassLoader(String name) {
+        ModuleClassLoader classLoader = getAllModuleClassLoader().get(name);
+        if(classLoader == null) {
+            classLoader = next.getModuleClassLoader(name);
         }
-        return super.find(name);
+        return classLoader;
+    }
+
+    public boolean isNewLoad(ModuleClassLoader moduleClassLoader) {
+        return getAllModuleClassLoader().containsValue(moduleClassLoader);
     }
 
     public void merge() {
@@ -108,7 +91,7 @@ public class ClassLoaderFactoryChain extends ClassLoaderFactory {
         for(Map.Entry<String, ModuleClassLoader> entry: moduleClassLoaders.entrySet()) {
             ModuleClassLoader classLoader = entry.getValue();
             classLoader.setFinder(next);
-            next.putModuleClassLoader(entry.getKey(), classLoader);
         }
+        next.getAllModuleClassLoader().putAll(moduleClassLoaders);
     }
 }

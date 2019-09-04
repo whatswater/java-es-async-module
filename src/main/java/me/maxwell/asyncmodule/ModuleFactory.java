@@ -9,11 +9,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 // 使用版本号实现模块路径隔离。
 // TODO getExport的时候添加泛型
 // TODO 设计模块卸载的接口，以释放资源
-// TODO 论证整个系统的多线程安全性，避免发生死锁
-// TODO 优化代码的结构，命名和性能，写方法注释
-// TODO 充分测试各个地方的代码
+// TODO 论证整个系统的多线程安全性，避免发生死锁(已经验证moduleFactory系统的安全性，还差classloader系统的)
+// TODO 优化代码的结构，命名和性能
+// TODO 编写文档、注释并充分测试各个地方的代码
 // TODO 编写模块系统cli
-// TODO 编写模块系统文档
 public class ModuleFactory {
     public static final String DEFAULT_VERSION = "default";
     public static final String VERSION_SPLIT = ":";

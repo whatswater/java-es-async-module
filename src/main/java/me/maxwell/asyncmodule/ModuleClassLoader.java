@@ -25,12 +25,12 @@ public class ModuleClassLoader extends ClassLoader implements Comparable<ModuleC
         this.name = name;
     }
 
-    public ModuleClassLoader findClassLoader(String name) {
+    public ModuleClassLoader findClassLoader(String className) {
         String version = ModuleFactory.DEFAULT_VERSION;
-        if(versionMap != null && versionMap.containsKey(name)) {
-            version = versionMap.get(name);
+        if(versionMap != null && versionMap.containsKey(className)) {
+            version = versionMap.get(className);
         }
-        return finder.find(version + ModuleFactory.VERSION_SPLIT + name);
+        return finder.find(className, version);
     }
 
     @Override
@@ -75,7 +75,7 @@ public class ModuleClassLoader extends ClassLoader implements Comparable<ModuleC
 
         Class<?> newCls = defineClass(name, data, 0, data.length);
         if(Module.class.isAssignableFrom(newCls)) {
-            addModuleClass((Class<Module>) newCls);
+            addModuleClass((Class<? extends Module>) newCls);
         }
         return newCls;
     }

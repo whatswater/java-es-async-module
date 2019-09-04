@@ -2,7 +2,6 @@ package me.maxwell.asyncmodule;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
 
 public class ClassLoaderFactory {
     private final Map<String, ModuleClassLoader> classLoaderHolder;
@@ -20,34 +19,23 @@ public class ClassLoaderFactory {
 
     public ClassLoaderBuilder getBuilder(String name) {
         Map<String, ClassLoaderBuilder> config = getConfig();
-        if(!config.containsKey(name)) {
-            return null;
-        }
         return config.get(name);
     }
 
-    public ModuleClassLoader findExact(String name) {
-        ClassLoaderBuilder builder = getBuilder(name);
+    public ModuleClassLoader findExact(String configName) {
+        ClassLoaderBuilder builder = getBuilder(configName);
         if(builder == null) {
             return null;
         }
 
-        String cacheKey = builder.getCacheKey(name);
-        return classLoaderHolder.computeIfAbsent(cacheKey, new Function<String, ModuleClassLoader>() {
-            @Override
-            public ModuleClassLoader apply(String key) {
-                return builder.createClassLoader(
-                        ClassLoaderFactory.this,
-                        parent,
-                        key
-                );
-            }
-        });
+        String classLoaderName = builder.getCacheKey(configName);
+        CreateLoaderFunction function = new CreateLoaderFunction(this, builder);
+        return classLoaderHolder.computeIfAbsent(classLoaderName, function);
     }
 
-    public ModuleClassLoader find(String name) {
+    public ModuleClassLoader find(String className, String version) {
         int lastIndex;
-        String tmp = name;
+        String tmp = version + ModuleFactory.VERSION_SPLIT + className;
         ModuleClassLoader classLoader;
 
         do {
@@ -64,10 +52,10 @@ public class ClassLoaderFactory {
         return classLoader;
     }
 
-    public Class<?> loadClass(String loaderFinderName, String className) throws ClassNotFoundException {
-        ModuleClassLoader classLoader = find(loaderFinderName);
+    public Class<?> loadClass(String className, String version) throws ClassNotFoundException {
+        ModuleClassLoader classLoader = find(className, version);
         if(classLoader == null) {
-            throw new ModuleSystemException("ClassLoaderFactory can not find module's classLoader," + " modulePath: " + loaderFinderName);
+            throw new ModuleSystemException("ClassLoaderFactory can not find module's classLoader, className: " + className + ", version: " + version);
         }
         return classLoader.findClass(className);
     }
@@ -80,15 +68,11 @@ public class ClassLoaderFactory {
         return config;
     }
 
-    public ModuleClassLoader getModuleClassLoader(String cacheKey) {
-        return classLoaderHolder.get(cacheKey);
-    }
-
-    public void putModuleClassLoader(String cacheKey, ModuleClassLoader classLoader) {
-        classLoaderHolder.put(cacheKey, classLoader);
-    }
-
     public Map<String, ModuleClassLoader> getAllModuleClassLoader() {
         return this.classLoaderHolder;
+    }
+
+    public ModuleClassLoader getModuleClassLoader(String name) {
+        return classLoaderHolder.get(name);
     }
 }

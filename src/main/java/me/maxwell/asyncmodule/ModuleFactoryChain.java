@@ -4,25 +4,25 @@ import java.util.*;
 
 public class ModuleFactoryChain extends ModuleFactory {
     private final ModuleFactory innerFactory;
-    private final Set<ModuleClassLoader> classLoaders;
+    private final ClassLoaderFactoryChain classLoaderFactory;
     private final List<ModuleInfo> moduleInfoList;
     private final Object lock = new Object();
 
-    public ModuleFactoryChain(ModuleFactory factory, Set<ModuleClassLoader> filter, ModuleLoadedListener listener) {
+    public ModuleFactoryChain(ModuleFactory factory, ClassLoaderFactoryChain classLoaderFactory, ModuleLoadedListener listener) {
         super(listener);
         this.innerFactory = factory;
-        this.classLoaders = filter;
+        this.classLoaderFactory = classLoaderFactory;
         this.moduleInfoList = new LinkedList<>();
     }
 
     @Override
     public ModuleInfo getModuleInfo(Class<? extends Module> moduleClass) {
         String moduleName = getModuleName(moduleClass);
-        ModuleInfo moduleInfo = getModuleInfoMap().get(moduleName);
+        ModuleInfo moduleInfo = innerFactory.findModuleInfo(moduleName);
         ModuleClassLoader classLoader = (ModuleClassLoader)moduleClass.getClassLoader();
 
         // 如果有新的模块加载，也在此工厂加载，以免工厂事件重复调用
-        if(moduleInfo == null || classLoaders.contains(classLoader)) {
+        if(moduleInfo == null || classLoaderFactory.isNewLoad(classLoader)) {
             ModuleInfo newModuleInfo = super.getModuleInfo(moduleClass);
             synchronized(lock) {
                 moduleInfoList.add(moduleInfo);
@@ -32,7 +32,7 @@ public class ModuleFactoryChain extends ModuleFactory {
             return newModuleInfo;
         }
         else {
-            return innerFactory.getModuleInfo(moduleClass);
+            return moduleInfo;
         }
     }
 
@@ -42,7 +42,7 @@ public class ModuleFactoryChain extends ModuleFactory {
         ModuleInfo moduleInfo = innerFactory.findModuleInfo(moduleName);
         ModuleClassLoader classLoader = (ModuleClassLoader)moduleClass.getClassLoader();
 
-        if(moduleInfo == null || classLoaders.contains(classLoader)) {
+        if(moduleInfo == null || classLoaderFactory.isNewLoad(classLoader)) {
             ModuleInfo newModuleInfo = super.getModuleInfo(moduleClass);
             newModuleInfo.addDependency(require);
             return newModuleInfo;
