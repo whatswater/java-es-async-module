@@ -63,6 +63,10 @@ public class ModuleSystem {
         ClassLoaderFactory classLoaderFactory = new ClassLoaderFactory(config);
         Class<?> cls = classLoaderFactory.loadClass(moduleClassName, version);
         if(!Module.class.isAssignableFrom(cls)) {
+            System.out.println(cls.getClassLoader());
+            System.out.println(cls.getClassLoader().getParent());
+            System.out.println(Module.class.getClassLoader());
+
             throw new ModuleSystemException("The cls: " + cls.getName() + " must implements Module Interface when loading");
         }
 

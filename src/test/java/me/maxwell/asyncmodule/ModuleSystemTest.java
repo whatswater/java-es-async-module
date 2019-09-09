@@ -202,11 +202,12 @@ public class ModuleSystemTest {
 
         config.put("default:me.maxwell.asyncmodule.ModuleSystemTest$Config", innerClassBuilder);
         config.put("default:me.maxwell.asyncmodule.ModuleSystemTest$DataSource", innerClassBuilder);
-        config.put("default:me.maxwell.asyncmodule.ModuleSystemTest$ArticleService", innerClassBuilder);
+        config.put("default:me.maxwell.asyncmodule.ModuleSystemTest$ArticleService", builder);
         config.put("default:me.maxwell.asyncmodule.ModuleSystemTest$TestModule", builder);
-        moduleSystem.load("me.maxwell.asyncmodule.ModuleSystemTest$TestModule", config);
+        config.put("default:me.maxwell.asyncmodule.ReloadTestModule", builder);
 
-        assertTrue(serviceLoader == configLoader);
+        moduleSystem.load("me.maxwell.asyncmodule.ReloadTestModule", config);
+        assertTrue(serviceLoader != configLoader);
         assertTrue(serviceLoader != testModuleLoader);
 
         int count = 0;
