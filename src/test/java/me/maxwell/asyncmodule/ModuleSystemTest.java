@@ -186,12 +186,9 @@ public class ModuleSystemTest {
         @Override
         public ModuleClassLoader createClassLoader(
                 ClassLoaderFactory finder,
-                ClassLoader parent,
                 String cacheKey
         ) {
-            ModuleClassLoader classLoader = new ModuleClassLoader(parent, cacheKey);
-            classLoader.setFinder(finder);
-            return classLoader;
+            return new ModuleClassLoader(cacheKey, finder);
         }
     }
 
@@ -220,11 +217,9 @@ public class ModuleSystemTest {
                 @Override
                 public ModuleClassLoader createClassLoader(
                         ClassLoaderFactory classLoaderFactory,
-                        ClassLoader parent,
                         String cacheKey
                 ) {
-                    ModuleClassLoader classLoader = new OldVersionClassLoader(parent, cacheKey);
-                    classLoader.setFinder(classLoaderFactory);
+                    ModuleClassLoader classLoader = new OldVersionClassLoader(cacheKey, classLoaderFactory);
                     return classLoader;
                 }
             });

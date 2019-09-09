@@ -5,8 +5,8 @@ import java.io.IOException;
 import java.io.InputStream;
 
 public class OldVersionClassLoader extends ModuleClassLoader {
-    public OldVersionClassLoader(ClassLoader parent, String name) {
-        super(parent, name);
+    public OldVersionClassLoader(String name, ClassLoaderFactory factory) {
+        super(name, factory);
     }
 
     @Override

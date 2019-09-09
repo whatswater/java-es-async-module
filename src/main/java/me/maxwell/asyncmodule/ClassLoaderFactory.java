@@ -6,15 +6,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ClassLoaderFactory {
     private final Map<String, ModuleClassLoader> classLoaderHolder;
     private Map<String, ClassLoaderBuilder> config;
-    private final ClassLoader parent;
 
     public ClassLoaderFactory(
-            Map<String, ClassLoaderBuilder> config,
-            ClassLoader parent
+            Map<String, ClassLoaderBuilder> config
     ) {
         this.config = config;
         this.classLoaderHolder = new ConcurrentHashMap<>();
-        this.parent = parent;
     }
 
     public ClassLoaderBuilder getBuilder(String name) {
@@ -58,10 +55,6 @@ public class ClassLoaderFactory {
             throw new ModuleSystemException("ClassLoaderFactory can not find module's classLoader, className: " + className + ", version: " + version);
         }
         return classLoader.findClass(className);
-    }
-
-    public ClassLoader getParent() {
-        return parent;
     }
 
     public Map<String, ClassLoaderBuilder> getConfig() {

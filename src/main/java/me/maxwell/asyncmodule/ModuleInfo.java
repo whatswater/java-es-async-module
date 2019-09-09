@@ -112,12 +112,47 @@ public class ModuleInfo {
         }
     }
 
-    public Module getModuleInstance() {
-        return this.moduleInstance;
+    // 去除监听
+    public synchronized void unListen(Set<String> moduleNames) {
+        for(Map.Entry<String, Set<String>> entry: requires.entrySet()) {
+            String moduleName = entry.getKey();
+            if(moduleNames.contains(moduleName)) {
+                continue;
+            }
+
+            ModuleInfo required = factory.findModuleInfo(moduleName);
+            for(String requireName: entry.getValue()) {
+                ModuleListenerList listenerList = required.getExports().get(requireName);
+                listenerList.getModuleInfoSet().remove(this);
+            }
+        }
     }
 
-    public Class<? extends Module> getModuleClass() {
-        return moduleInstance.getClass();
+    // 向新加载的模块添加观察者，并且调用观察者的重新加载方法
+    public synchronized void reExport(ModuleInfo oldModuleInfo, Set<String> moduleNames) {
+        Map<String, ModuleListenerList> oldExports = oldModuleInfo.getExports();
+        for(Map.Entry<String, ModuleListenerList> entry: oldExports.entrySet()) {
+            for(ModuleInfo moduleInfo: entry.getValue().getModuleInfoSet()) {
+                if(moduleNames.contains(moduleInfo.getModuleName())) {
+                    continue;
+                }
+                String requireName = entry.getKey();
+                ModuleListenerList listenerList = exports.get(requireName);
+
+                // 当重新加载的模块被其他模块依赖而又没有满足时，listenerList不为null但是moduleExport为null
+                if(listenerList == null || listenerList.getModuleExport() == null) {
+                    moduleInfo.getModuleInstance().onReloadRequireMissed(moduleInfo, this, requireName);
+                }
+                else {
+                    listenerList.getModuleInfoSet().add(moduleInfo);
+                    moduleInfo.getModuleInstance().onReloadRequireMissed(moduleInfo, this, requireName);
+                }
+            }
+        }
+    }
+
+    public Module getModuleInstance() {
+        return this.moduleInstance;
     }
 
     public ModuleState getModuleState() {

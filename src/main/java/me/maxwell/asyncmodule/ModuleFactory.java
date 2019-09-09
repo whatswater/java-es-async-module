@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 // 模块本身是否存在，根据类加载器确定；模块是否导出了某个对象，由模块系统支持
 // 不同工厂的NAME_SPACE实例属性可以相同，使用NAME_SPACE实现资源隔离。
 // 使用版本号实现模块路径隔离。
+// TODO 校验重新加载后ModuleClassLoader和moduleClassList属性的逻辑
 // TODO getExport的时候添加泛型
 // TODO 设计模块卸载的接口，以释放资源
 // TODO 论证整个系统的多线程安全性，避免发生死锁(已经验证moduleFactory系统的安全性，还差classloader系统的)

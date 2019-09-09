@@ -4,28 +4,14 @@ public interface ClassLoaderBuilder {
     default String getCacheKey(String configName) {
         return configName;
     }
-    ModuleClassLoader createClassLoader(
+    default ModuleClassLoader createClassLoader(
             ClassLoaderFactory classLoaderFactory,
-            ClassLoader parent,
             String cacheKey
-    );
-
-
-    static ClassLoaderBuilder builder() {
-        return new DefaultBuilder();
+    ) {
+        return new ModuleClassLoader(cacheKey, classLoaderFactory);
     }
 
-    class DefaultBuilder implements ClassLoaderBuilder {
-        @Override
-        public ModuleClassLoader createClassLoader(
-                ClassLoaderFactory finder,
-                ClassLoader parent,
-                String cacheKey
-        ) {
-
-            ModuleClassLoader classLoader = new ModuleClassLoader(parent, cacheKey);
-            classLoader.setFinder(finder);
-            return classLoader;
-        }
+    static ClassLoaderBuilder builder() {
+        return new ClassLoaderBuilder() {  };
     }
 }

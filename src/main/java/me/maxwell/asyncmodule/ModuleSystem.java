@@ -1,5 +1,9 @@
 package me.maxwell.asyncmodule;
 
+import java.io.IOException;
+import java.net.*;
+import java.nio.ByteBuffer;
+import java.nio.channels.*;
 import java.util.*;
 
 public class ModuleSystem {
@@ -10,9 +14,53 @@ public class ModuleSystem {
     private ClassLoaderFactory classLoaderFactory;
     private ModuleFactory moduleFactory;
 
+    public static void main(String[] args) throws IOException {
+        ModuleSystem moduleSystem = new ModuleSystem();
+        moduleSystem.startServer();
+    }
+
+    public void startServer() throws IOException {
+        Selector selector = Selector.open();
+        ServerSocketChannel ss = ServerSocketChannel.open();
+        InetSocketAddress hostAddress = new InetSocketAddress("localhost", 9527);
+        ss.bind(hostAddress);
+        ss.configureBlocking(false);
+        ss.register(selector, ss.validOps());
+
+        while(true) {
+            int n = selector.select();
+            if(n == 0) {
+                continue;
+            }
+            Iterator<SelectionKey> it = selector.selectedKeys().iterator();
+            while(it.hasNext()) {
+                SelectionKey key = it.next();
+
+                if(key.isAcceptable()) {
+                    SocketChannel client = ss.accept();
+                    client.configureBlocking(false);
+                    client.register(selector, SelectionKey.OP_READ);
+                }
+                else if(key.isReadable()) {
+                    SelectableChannel channel = key.channel();
+                    if(channel instanceof SocketChannel) {
+                        SocketChannel socketChannel = (SocketChannel) channel;
+                        ByteBuffer buffer = ByteBuffer.allocate(256);
+                        socketChannel.read(buffer);
+
+                        System.out.print(new String(buffer.array()));
+                        buffer.flip();
+                        socketChannel.write(buffer);
+                    }
+                }
+                it.remove();
+            }
+        }
+    }
+
     @SuppressWarnings("unchecked")
     public ModuleFactory load(String moduleClassName, String version, Map<String, ClassLoaderBuilder> config) throws ClassNotFoundException {
-        ClassLoaderFactory classLoaderFactory = new ClassLoaderFactory(config, Module.class.getClassLoader());
+        ClassLoaderFactory classLoaderFactory = new ClassLoaderFactory(config);
         Class<?> cls = classLoaderFactory.loadClass(moduleClassName, version);
         if(!Module.class.isAssignableFrom(cls)) {
             throw new ModuleSystemException("The cls: " + cls.getName() + " must implements Module Interface when loading");
@@ -45,7 +93,7 @@ public class ModuleSystem {
         }
 
         ModuleClassLoader loader = classLoaderFactory.find(moduleClassName, version);
-        Set<ModuleClassLoader> reloads = getReloadModules(loader);
+        Set<ModuleClassLoader> reloads = loader.getReloadModules();
         List<String> moduleNames = getModuleNames(reloads);
 
         ClassLoaderFactoryChain newFinder = new ClassLoaderFactoryChain(config, classLoaderFactory, reloads);
@@ -59,6 +107,9 @@ public class ModuleSystem {
             public void onAllModuleLoaded(ModuleFactory factory) {
                 System.out.println("moduleFactory loaded");
                 newFinder.merge();
+                for(ModuleClassLoader classLoader: reloads) {
+                    classLoader.unListen(reloads);
+                }
                 if(factory instanceof ModuleFactoryChain) {
                     ((ModuleFactoryChain) factory).merge();
                 }
@@ -77,36 +128,8 @@ public class ModuleSystem {
     public ModuleFactory getModuleFactory() {
         return this.moduleFactory;
     }
-
     public ClassLoaderFactory getClassLoaderFactory() {
         return this.classLoaderFactory;
-    }
-
-    private Set<ModuleClassLoader> getReloadModules(ModuleClassLoader loader) {
-        Set<ModuleClassLoader> reloads = new TreeSet<>();
-        Stack<Iterator<ModuleClassLoader>> stack = new Stack<>();
-        reloads.add(loader);
-        if(!loader.getReloadListeners().isEmpty()) {
-            stack.push(loader.getReloadListeners().iterator());
-            while(true) {
-                Iterator<ModuleClassLoader> it = stack.lastElement();
-                if(it.hasNext()) {
-                    ModuleClassLoader loader1 = it.next();
-                    reloads.add(loader1);
-                    if(loader1.getReloadListeners() == null || loader1.getReloadListeners().isEmpty()) {
-                        continue;
-                    }
-                    stack.push(loader1.getReloadListeners().iterator());
-                }
-                else if(stack.size() > 1) {
-                    stack.pop();
-                }
-                else {
-                    break;
-                }
-            }
-        }
-        return reloads;
     }
 
     private List<String> getModuleNames(Set<ModuleClassLoader> reloads) {

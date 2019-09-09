@@ -9,21 +9,12 @@ public class ClassLoaderFactoryChain extends ClassLoaderFactory {
 
     public ClassLoaderFactoryChain(
             Map<String, ClassLoaderBuilder> config,
-            ClassLoader parent,
             ClassLoaderFactory next,
             Set<ModuleClassLoader> reloads
     ) {
-        super(config, parent);
+        super(config);
         this.next = next;
         this.reloads = reloads;
-    }
-
-    public ClassLoaderFactoryChain(
-            Map<String, ClassLoaderBuilder> config,
-            ClassLoaderFactory next,
-            Set<ModuleClassLoader> reloads
-    ) {
-        this(config, next.getParent(), next, reloads);
     }
 
     @Override
@@ -90,7 +81,7 @@ public class ClassLoaderFactoryChain extends ClassLoaderFactory {
         Map<String, ModuleClassLoader> moduleClassLoaders = getAllModuleClassLoader();
         for(Map.Entry<String, ModuleClassLoader> entry: moduleClassLoaders.entrySet()) {
             ModuleClassLoader classLoader = entry.getValue();
-            classLoader.setFinder(next);
+            classLoader.resetFactory(next);
         }
         next.getAllModuleClassLoader().putAll(moduleClassLoaders);
     }

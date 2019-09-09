@@ -15,7 +15,6 @@ public class CreateLoaderFunction implements Function<String, ModuleClassLoader>
     public ModuleClassLoader apply(String classLoaderName) {
         return builder.createClassLoader(
                 factory,
-                factory.getParent(),
                 classLoaderName
         );
     }

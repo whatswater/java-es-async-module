@@ -6,23 +6,31 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
-import java.util.concurrent.ConcurrentSkipListSet;
+import java.util.concurrent.ConcurrentHashMap;
 
-public class ModuleClassLoader extends ClassLoader implements Comparable<ModuleClassLoader> {
+public class ModuleClassLoader extends ClassLoader {
+    private final static String V = "what'swater";
+
+    @Getter
     private final String name;
     private Map<String, String> versionMap;
     private ClassLoaderFactory finder;
-    @Getter
     private List<Class<? extends Module>> moduleClassList;
-    @Getter
-    private Set<ModuleClassLoader> reloadListeners = new ConcurrentSkipListSet<>();
+    private Map<ModuleClassLoader, Object> listeners = new ConcurrentHashMap<>();
+    private Map<ModuleClassLoader, Object> requires = new ConcurrentHashMap<>();
 
-    public ModuleClassLoader(ClassLoader parent, String name) {
-        super(parent);
+    public ModuleClassLoader(String name, ClassLoaderFactory factory) {
+        this(name, factory, null);
+    }
+
+    public ModuleClassLoader(String name, ClassLoaderFactory factory, Map<String, String> versionMap) {
+        super(Module.class.getClassLoader());
         if(name == null || name.length() == 0) {
             throw new RuntimeException("ModuleClassLoader's name must not null or empty");
         }
         this.name = name;
+        this.finder = factory;
+        this.versionMap = versionMap;
     }
 
     public ModuleClassLoader findClassLoader(String className) {
@@ -41,7 +49,8 @@ public class ModuleClassLoader extends ClassLoader implements Comparable<ModuleC
             if(classLoader != null) {
                 cls = classLoader.findClass(name);
                 if(classLoader != this) {
-                    classLoader.addReloadListener(this);
+                    classLoader.listeners.put(this, V);
+                    requires.put(classLoader, V);
                 }
             }
             else {
@@ -54,6 +63,7 @@ public class ModuleClassLoader extends ClassLoader implements Comparable<ModuleC
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public Class<?> findClass(String name) throws ClassNotFoundException {
         Class<?> cls = findLoadedClass(name);
@@ -87,27 +97,49 @@ public class ModuleClassLoader extends ClassLoader implements Comparable<ModuleC
         this.moduleClassList.add(moduleClass);
     }
 
-    public void addReloadListener(ModuleClassLoader moduleClassLoader) {
-        this.reloadListeners.add(moduleClassLoader);
-    }
-
-    public void setFinder(ClassLoaderFactory finder) {
-        this.finder = finder;
-    }
-
-    public void setVersionMap(Map<String, String> versionMap) {
-        this.versionMap = versionMap;
-    }
-
-    public String getName() {
-        return this.name;
-    }
-
-    @Override
-    public int compareTo(ModuleClassLoader o) {
-        if(o == null) {
-            return 1;
+    public void unListen(Set<ModuleClassLoader> except) {
+        for(ModuleClassLoader moduleClassLoader: requires.keySet()) {
+            if(except.contains(moduleClassLoader)) {
+                continue;
+            }
+            moduleClassLoader.listeners.remove(this);
         }
-        return this.name.compareTo(o.name);
+    }
+
+    public Set<ModuleClassLoader> getReloadModules() {
+        Set<ModuleClassLoader> reloads = new HashSet<>();
+        Stack<Iterator<ModuleClassLoader>> stack = new Stack<>();
+        ModuleClassLoader loader = this;
+
+        reloads.add(loader);
+        if(!loader.listeners.isEmpty()) {
+            stack.push(loader.listeners.keySet().iterator());
+            while(true) {
+                Iterator<ModuleClassLoader> it = stack.lastElement();
+                if(it.hasNext()) {
+                    ModuleClassLoader loader1 = it.next();
+                    reloads.add(loader1);
+                    if(loader1.listeners == null || loader1.listeners.isEmpty()) {
+                        continue;
+                    }
+                    stack.push(loader1.listeners.keySet().iterator());
+                }
+                else if(stack.size() > 1) {
+                    stack.pop();
+                }
+                else {
+                    break;
+                }
+            }
+        }
+        return reloads;
+    }
+
+    public List<Class<? extends Module>> getModuleClassList() {
+        return moduleClassList;
+    }
+
+    public void resetFactory(ClassLoaderFactory factory) {
+        this.finder = factory;
     }
 }
