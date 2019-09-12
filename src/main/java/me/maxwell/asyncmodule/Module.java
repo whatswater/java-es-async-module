@@ -53,5 +53,6 @@ public interface Module {
             ModuleInfo moduleInfo,
             ModuleInfo requireModuleInfo,
             String name
-    ) {}
+    ) {
+    }
 }

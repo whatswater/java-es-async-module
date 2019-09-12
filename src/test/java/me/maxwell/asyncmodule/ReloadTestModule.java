@@ -7,7 +7,7 @@ public class ReloadTestModule implements Module {
 
     @Override
     public void register(ModuleInfo moduleInfo) {
-        moduleInfo.require(ModuleSystemTest.ArticleService.class, SYMBOL_MAX_INT_VALUE.getKey());
+        moduleInfo.require("me.maxwell.asyncmodule.ModuleSystemTest$ArticleService", SYMBOL_MAX_INT_VALUE.getKey());
     }
 
     @Override
@@ -24,7 +24,8 @@ public class ReloadTestModule implements Module {
 
     @Override
     public void onReloadRequireResolved(ModuleInfo moduleInfo, ModuleInfo requireModuleInfo, String name) {
-        System.out.println("11111111111111111111111");
+        Integer maxValue = requireModuleInfo.getExport(SYMBOL_MAX_INT_VALUE);
+        assertTrue(maxValue == -1);
     }
 
     @Override

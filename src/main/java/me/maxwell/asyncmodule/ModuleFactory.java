@@ -4,14 +4,9 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// 模块本身是否存在，根据类加载器确定；模块是否导出了某个对象，由模块系统支持
-// 不同工厂的NAME_SPACE实例属性可以相同，使用NAME_SPACE实现资源隔离。
-// 使用版本号实现模块路径隔离。
 // TODO 校验重新加载后ModuleClassLoader和moduleClassList属性的逻辑
 // TODO getExport的时候添加泛型
-// TODO 设计模块卸载的接口，以释放资源
-// TODO 论证整个系统的多线程安全性，避免发生死锁(已经验证moduleFactory系统的安全性，还差classloader系统的)
-// TODO 优化代码的结构，命名和性能
+// TODO 编写模块加载和卸载方法（现在的加载方法不能调用两次）
 // TODO 编写文档、注释并充分测试各个地方的代码
 // TODO 编写模块系统cli
 public class ModuleFactory {
@@ -24,13 +19,15 @@ public class ModuleFactory {
     private final ConcurrentHashMap<String, Object> lock2 = new ConcurrentHashMap<>();
     private final AtomicInteger count = new AtomicInteger(0);
     private final ModuleLoadedListener moduleLoadedListener;
+    private final ClassLoaderFactory classLoaderFactory;
 
-    public ModuleFactory() {
-        this.moduleLoadedListener = null;
+    public ModuleFactory(ClassLoaderFactory classLoaderFactory) {
+        this(classLoaderFactory, null);
     }
 
-    public ModuleFactory(ModuleLoadedListener listener) {
+    public ModuleFactory(ClassLoaderFactory classLoaderFactory, ModuleLoadedListener listener) {
         this.moduleLoadedListener = listener;
+        this.classLoaderFactory = classLoaderFactory;
     }
 
     /**
@@ -56,7 +53,7 @@ public class ModuleFactory {
     public ModuleInfo getModuleInfo(final Class<? extends Module> moduleClass) {
         String moduleName = getModuleName(moduleClass);
 
-        ModuleInfo moduleInfo = moduleInfoMap.get(moduleName);
+        ModuleInfo moduleInfo = findModuleInfo(moduleName);
         if(moduleInfo == null) {
             synchronized(getLock1(moduleName)) {
                 ModuleInfo re = moduleInfoMap.get(moduleName);
@@ -81,7 +78,7 @@ public class ModuleFactory {
      * @param moduleName 模块名
      * @return
      */
-    public ModuleInfo findModuleInfo(String moduleName) {
+    public final ModuleInfo findModuleInfo(String moduleName) {
         return moduleInfoMap.get(moduleName);
     }
 
@@ -121,6 +118,55 @@ public class ModuleFactory {
         ModuleInfo moduleInfo = getModuleInfo(moduleClass);
         moduleInfo.addDependency(require);
         return moduleInfo;
+    }
+
+    /**
+     * 判断模块类是否存在
+     * @param className 类名
+     * @param version 版本
+     * @return
+     */
+    @SuppressWarnings("unchecked")
+    public boolean isModuleClassExist(String className, String version) {
+        Class<?> cls;
+        try {
+            cls = classLoaderFactory.loadClass(className, version);
+        } catch(ClassNotFoundException e) {
+            return false;
+        }
+        if(!Module.class.isAssignableFrom(cls)) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 根据名字和版本require
+     * @param className 类名
+     * @param version 版本
+     * @param require 依赖
+     * @return
+     */
+    @SuppressWarnings("unchecked")
+    public ModuleInfo require(String className, String version, Require require) {
+        ModuleInfo moduleInfo = findModuleInfo(version + ModuleFactory.VERSION_SPLIT + className);
+        if(moduleInfo != null) {
+            moduleInfo.addDependency(require);
+            return moduleInfo;
+        }
+
+        Class<?> cls;
+        try {
+            cls = classLoaderFactory.loadClass(className, version);
+        } catch(ClassNotFoundException e) {
+            throw new InstanceModuleException("The " + className + " with version: " + version + " can not be find", e);
+        }
+
+        if(!Module.class.isAssignableFrom(cls)) {
+            throw new InstanceModuleException("The " + className + " must implements Module interface" + version, null);
+        }
+
+        return require((Class<? extends Module>)cls, require);
     }
 
     /**

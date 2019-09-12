@@ -209,6 +209,7 @@ public class ModuleSystemTest {
         moduleSystem.load("me.maxwell.asyncmodule.ReloadTestModule", config);
         assertTrue(serviceLoader != configLoader);
         assertTrue(serviceLoader != testModuleLoader);
+        moduleSystem.load("me.maxwell.asyncmodule.ModuleSystemTest$TestModule", config);
 
         int count = 0;
         while(true) {
@@ -243,8 +244,13 @@ public class ModuleSystemTest {
         }
 
         try {
-            Thread.sleep(120 * 1000);
+            Thread.sleep(3600 * 1000);
         } catch(InterruptedException e) {
         }
+    }
+
+    public static void main(String[] args) throws ClassNotFoundException {
+        ModuleSystemTest methodSystemTest = new ModuleSystemTest();
+        methodSystemTest.moduleSystemTest();
     }
 }

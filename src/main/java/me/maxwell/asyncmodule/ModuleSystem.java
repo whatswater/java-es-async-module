@@ -63,15 +63,11 @@ public class ModuleSystem {
         ClassLoaderFactory classLoaderFactory = new ClassLoaderFactory(config);
         Class<?> cls = classLoaderFactory.loadClass(moduleClassName, version);
         if(!Module.class.isAssignableFrom(cls)) {
-            System.out.println(cls.getClassLoader());
-            System.out.println(cls.getClassLoader().getParent());
-            System.out.println(Module.class.getClassLoader());
-
             throw new ModuleSystemException("The cls: " + cls.getName() + " must implements Module Interface when loading");
         }
 
         Class<? extends Module> moduleClass = (Class<? extends Module>) cls;
-        ModuleFactory moduleFactory = new ModuleFactory(new ModuleLoadedListener() {
+        ModuleFactory moduleFactory = new ModuleFactory(classLoaderFactory, new ModuleLoadedListener() {
             @Override
             public void onModuleLoaded(ModuleInfo moduleInfo, ModuleFactory factory) {
                 System.out.println(moduleInfo.getModuleName() + " loaded");
@@ -117,7 +113,6 @@ public class ModuleSystem {
                 if(factory instanceof ModuleFactoryChain) {
                     ((ModuleFactoryChain) factory).merge();
                 }
-                System.out.println("12312312");
             }
         });
 

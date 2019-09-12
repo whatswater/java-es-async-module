@@ -9,7 +9,7 @@ public class ModuleFactoryChain extends ModuleFactory {
     private final Object lock = new Object();
 
     public ModuleFactoryChain(ModuleFactory factory, ClassLoaderFactoryChain classLoaderFactory, ModuleLoadedListener listener) {
-        super(listener);
+        super(classLoaderFactory, listener);
         this.innerFactory = factory;
         this.classLoaderFactory = classLoaderFactory;
         this.moduleInfoList = new LinkedList<>();
@@ -62,10 +62,9 @@ public class ModuleFactoryChain extends ModuleFactory {
             ModuleInfo moduleInfo = moduleInfoList.get(i);
             if(moduleInfo != null) {
                 moduleNames.add(moduleInfo.getModuleName());
-                if(i % 2 == 1) {
-                    moduleInfo.setFactory(innerFactory);
-                }
             }
+            ModuleInfo newModuleInfo = moduleInfoList.get(i + 1);
+            newModuleInfo.setFactory(innerFactory);
         }
 
         for(int i = 0; i < moduleInfoList.size(); i = i + 2) {

@@ -33,10 +33,24 @@ public class ModuleInfo {
 
     public final synchronized void require(
             Class<? extends Module> moduleClass,
-            String... moduleNames
+            String... requireNames
     ) {
-        Require require = new Require(this, moduleNames);
+        Require require = new Require(this, requireNames);
         ModuleInfo moduleInfo = factory.require(moduleClass, require);
+        addRequire(moduleInfo.getModuleName(), require);
+    }
+
+    public final synchronized void require(String className) {
+        require(className, ModuleFactory.DEFAULT_VERSION, ModuleFactory.DEFAULT_NAME);
+    }
+
+    public final synchronized void require(String className, String requireName) {
+        require(className, ModuleFactory.DEFAULT_VERSION, requireName);
+    }
+
+    public final synchronized void require(String className, String version, String... requireNames) {
+        Require require = new Require(this, requireNames);
+        ModuleInfo moduleInfo = factory.require(className, version, require);
         addRequire(moduleInfo.getModuleName(), require);
     }
 
@@ -129,11 +143,11 @@ public class ModuleInfo {
     }
 
     // 向新加载的模块添加观察者，并且调用观察者的重新加载方法
-    public synchronized void reExport(ModuleInfo oldModuleInfo, Set<String> moduleNames) {
+    public synchronized void reExport(ModuleInfo oldModuleInfo, Set<String> exceptNames) {
         Map<String, ModuleListenerList> oldExports = oldModuleInfo.getExports();
         for(Map.Entry<String, ModuleListenerList> entry: oldExports.entrySet()) {
             for(ModuleInfo moduleInfo: entry.getValue().getModuleInfoSet()) {
-                if(moduleNames.contains(moduleInfo.getModuleName())) {
+                if(exceptNames.contains(moduleInfo.getModuleName())) {
                     continue;
                 }
                 String requireName = entry.getKey();
@@ -145,7 +159,7 @@ public class ModuleInfo {
                 }
                 else {
                     listenerList.getModuleInfoSet().add(moduleInfo);
-                    moduleInfo.getModuleInstance().onReloadRequireMissed(moduleInfo, this, requireName);
+                    moduleInfo.getModuleInstance().onReloadRequireResolved(moduleInfo, this, requireName);
                 }
             }
         }
