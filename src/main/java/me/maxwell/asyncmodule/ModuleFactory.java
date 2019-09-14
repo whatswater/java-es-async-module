@@ -4,11 +4,13 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// TODO 校验重新加载后ModuleClassLoader和moduleClassList属性的逻辑
-// TODO getExport的时候添加泛型
-// TODO 编写模块加载和卸载方法（现在的加载方法不能调用两次）
-// TODO 编写文档、注释并充分测试各个地方的代码
-// TODO 编写模块系统cli
+// TODO 1、改写模块系统的加载方法，一次加载可以加载多个模块(已完成)
+// TODO 2、将factory的getModuleInfo暴露出去，当作加载新模块的命令(已完成)
+// TODO 3、将对加载器的几种操作单独写成方法（删除、新增、重新加载等），代替之前的传递一个config
+// TODO 4、根据工作3，重构之前的重新加载模块方法
+// TODO 5、编写模块卸载方法
+// TODO 6、编写文档、注释并充分测试各个地方的代码
+// TODO 7、改成多工程项目，编写模块系统cli，编写示例应用
 public class ModuleFactory {
     public static final String DEFAULT_VERSION = "default";
     public static final String VERSION_SPLIT = ":";
@@ -32,7 +34,7 @@ public class ModuleFactory {
 
     /**
      * 根据moduleClass获取此模块的名字
-     * @param moduleClass
+     * @param moduleClass 模块类型cls
      * @return
      */
     public String getModuleName(Class<? extends Module> moduleClass) {
@@ -47,7 +49,7 @@ public class ModuleFactory {
 
     /**
      * 获取模块信息，如果没有会创建
-     * @param moduleClass 模块类
+     * @param moduleClass 模块类型cls
      * @return
      */
     public ModuleInfo getModuleInfo(final Class<? extends Module> moduleClass) {
@@ -83,9 +85,6 @@ public class ModuleFactory {
     }
 
     /**
-     * 此方法有线程安全问题，moduleState是volatile变量，所以保证了同一个模块只会触发一次count--，
-     * 但是count本身是int类型的，为了并发执行，此方法的锁是一个moduleName一个锁，count此时就会出现线程安全问题
-     * 所以count要设置为AtomicInteger，用CAS去更新
      * 将模块设置为运行状态
      * 注意：如果有其他地方能够更改moduleInfo的状态，需要和此处共用一个锁，才可以保证一致性
      * @param moduleName 模块名称
@@ -126,7 +125,6 @@ public class ModuleFactory {
      * @param version 版本
      * @return
      */
-    @SuppressWarnings("unchecked")
     public boolean isModuleClassExist(String className, String version) {
         Class<?> cls;
         try {
@@ -134,10 +132,7 @@ public class ModuleFactory {
         } catch(ClassNotFoundException e) {
             return false;
         }
-        if(!Module.class.isAssignableFrom(cls)) {
-            return false;
-        }
-        return true;
+        return Module.class.isAssignableFrom(cls);
     }
 
     /**

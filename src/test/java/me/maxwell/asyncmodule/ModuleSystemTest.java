@@ -140,7 +140,6 @@ public class ModuleSystemTest {
                 articleService = rModuleInfo.getExport(NAME_ArticleService);
                 Article article = articleService.getArticle("1");
                 assertTrue(article != null);
-                System.out.println(article.id);
                 assertTrue("jdbc:postgresql://localhost:5236/document".equals(article.url));
             }
             else if("MAX_INT_VALUE".equals(name)) {
@@ -198,18 +197,27 @@ public class ModuleSystemTest {
         ClassLoaderBuilder builder = ClassLoaderBuilder.builder();
         ClassLoaderBuilder innerClassBuilder = new InnerLoader();
 
-        ModuleSystem moduleSystem = new ModuleSystem();
+        ModuleSystem moduleSystem = new ModuleSystem(config, new ModuleLoadedListener() {
+            @Override
+            public void onModuleLoaded(ModuleInfo moduleInfo, ModuleFactory factory) {
+                System.out.println(moduleInfo.getModuleName() + " loaded");
+            }
 
+            @Override
+            public void onAllModuleLoaded(ModuleFactory factory) {
+                System.out.println("moduleFactory loaded");
+            }
+        });
         config.put("default:me.maxwell.asyncmodule.ModuleSystemTest$Config", innerClassBuilder);
         config.put("default:me.maxwell.asyncmodule.ModuleSystemTest$DataSource", innerClassBuilder);
         config.put("default:me.maxwell.asyncmodule.ModuleSystemTest$ArticleService", builder);
         config.put("default:me.maxwell.asyncmodule.ModuleSystemTest$TestModule", builder);
         config.put("default:me.maxwell.asyncmodule.ReloadTestModule", builder);
 
-        moduleSystem.load("me.maxwell.asyncmodule.ReloadTestModule", config);
+        moduleSystem.loadModule("me.maxwell.asyncmodule.ReloadTestModule");
         assertTrue(serviceLoader != configLoader);
         assertTrue(serviceLoader != testModuleLoader);
-        moduleSystem.load("me.maxwell.asyncmodule.ModuleSystemTest$TestModule", config);
+        moduleSystem.loadModule("me.maxwell.asyncmodule.ModuleSystemTest$TestModule");
 
         int count = 0;
         while(true) {

@@ -1,89 +1,33 @@
 package me.maxwell.asyncmodule;
 
-import java.io.IOException;
-import java.net.*;
-import java.nio.ByteBuffer;
-import java.nio.channels.*;
 import java.util.*;
 
 public class ModuleSystem {
-    public ModuleFactory load(String moduleClassName, Map<String, ClassLoaderBuilder> config) throws ClassNotFoundException {
-        return load(moduleClassName, ModuleFactory.DEFAULT_VERSION, config);
-    }
-
     private ClassLoaderFactory classLoaderFactory;
     private ModuleFactory moduleFactory;
 
-    public static void main(String[] args) throws IOException {
-        ModuleSystem moduleSystem = new ModuleSystem();
-        moduleSystem.startServer();
+    public ModuleSystem(Map<String, ClassLoaderBuilder> config) {
+        this(config, null);
     }
 
-    public void startServer() throws IOException {
-        Selector selector = Selector.open();
-        ServerSocketChannel ss = ServerSocketChannel.open();
-        InetSocketAddress hostAddress = new InetSocketAddress("localhost", 9527);
-        ss.bind(hostAddress);
-        ss.configureBlocking(false);
-        ss.register(selector, ss.validOps());
+    public ModuleSystem(Map<String, ClassLoaderBuilder> config, ModuleLoadedListener listener) {
+        this.classLoaderFactory = new ClassLoaderFactory(config);
+        this.moduleFactory = new ModuleFactory(this.classLoaderFactory, listener);
+    }
 
-        while(true) {
-            int n = selector.select();
-            if(n == 0) {
-                continue;
-            }
-            Iterator<SelectionKey> it = selector.selectedKeys().iterator();
-            while(it.hasNext()) {
-                SelectionKey key = it.next();
-
-                if(key.isAcceptable()) {
-                    SocketChannel client = ss.accept();
-                    client.configureBlocking(false);
-                    client.register(selector, SelectionKey.OP_READ);
-                }
-                else if(key.isReadable()) {
-                    SelectableChannel channel = key.channel();
-                    if(channel instanceof SocketChannel) {
-                        SocketChannel socketChannel = (SocketChannel) channel;
-                        ByteBuffer buffer = ByteBuffer.allocate(256);
-                        socketChannel.read(buffer);
-
-                        System.out.print(new String(buffer.array()));
-                        buffer.flip();
-                        socketChannel.write(buffer);
-                    }
-                }
-                it.remove();
-            }
-        }
+    public void loadModule(String moduleClassName) throws ClassNotFoundException {
+        loadModule(moduleClassName, ModuleFactory.DEFAULT_VERSION);
     }
 
     @SuppressWarnings("unchecked")
-    public ModuleFactory load(String moduleClassName, String version, Map<String, ClassLoaderBuilder> config) throws ClassNotFoundException {
-        ClassLoaderFactory classLoaderFactory = new ClassLoaderFactory(config);
+    public void loadModule(String moduleClassName, String version) throws ClassNotFoundException {
         Class<?> cls = classLoaderFactory.loadClass(moduleClassName, version);
         if(!Module.class.isAssignableFrom(cls)) {
             throw new ModuleSystemException("The cls: " + cls.getName() + " must implements Module Interface when loading");
         }
 
         Class<? extends Module> moduleClass = (Class<? extends Module>) cls;
-        ModuleFactory moduleFactory = new ModuleFactory(classLoaderFactory, new ModuleLoadedListener() {
-            @Override
-            public void onModuleLoaded(ModuleInfo moduleInfo, ModuleFactory factory) {
-                System.out.println(moduleInfo.getModuleName() + " loaded");
-            }
-
-            @Override
-            public void onAllModuleLoaded(ModuleFactory factory) {
-                System.out.println("moduleFactory loaded");
-            }
-        });
         moduleFactory.getModuleInfo(moduleClass);
-
-        this.classLoaderFactory = classLoaderFactory;
-        this.moduleFactory = moduleFactory;
-
-        return moduleFactory;
     }
 
     @SuppressWarnings("unchecked")
