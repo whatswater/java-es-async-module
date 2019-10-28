@@ -4,14 +4,12 @@ import java.util.*;
 
 public class ModuleFactoryChain extends ModuleFactory {
     private final ModuleFactory innerFactory;
-    private final ClassLoaderFactoryChain classLoaderFactory;
     private final List<ModuleInfo> moduleInfoList;
     private final Object lock = new Object();
 
-    public ModuleFactoryChain(ModuleFactory factory, ClassLoaderFactoryChain classLoaderFactory, ModuleLoadedListener listener) {
-        super(classLoaderFactory, listener);
+    public ModuleFactoryChain(ModuleFactory factory, ClassLoaderFactory loaderFactory, ModuleLoadedListener listener) {
+        super(loaderFactory);
         this.innerFactory = factory;
-        this.classLoaderFactory = classLoaderFactory;
         this.moduleInfoList = new LinkedList<>();
     }
 
@@ -22,7 +20,8 @@ public class ModuleFactoryChain extends ModuleFactory {
         ModuleClassLoader classLoader = (ModuleClassLoader)moduleClass.getClassLoader();
 
         // 如果有新的模块加载，也在此工厂加载，以免工厂事件重复调用
-        if(moduleInfo == null || classLoaderFactory.isNewLoad(classLoader)) {
+        // if(moduleInfo == null || classLoaderFactory.isNewLoad(classLoader)) {
+        if(moduleInfo == null) {
             ModuleInfo newModuleInfo = super.getModuleInfo(moduleClass);
             synchronized(lock) {
                 moduleInfoList.add(moduleInfo);
@@ -42,7 +41,7 @@ public class ModuleFactoryChain extends ModuleFactory {
         ModuleInfo moduleInfo = innerFactory.findModuleInfo(moduleName);
         ModuleClassLoader classLoader = (ModuleClassLoader)moduleClass.getClassLoader();
 
-        if(moduleInfo == null || classLoaderFactory.isNewLoad(classLoader)) {
+        /*if(moduleInfo == null || classLoaderFactory.isNewLoad(classLoader)) {
             ModuleInfo newModuleInfo = super.getModuleInfo(moduleClass);
             newModuleInfo.addDependency(require);
             return newModuleInfo;
@@ -50,7 +49,8 @@ public class ModuleFactoryChain extends ModuleFactory {
         else {
             moduleInfo.addDependency(require);
             return moduleInfo;
-        }
+        }*/
+        return moduleInfo;
     }
 
     /**

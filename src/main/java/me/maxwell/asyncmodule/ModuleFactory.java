@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 // TODO 4、根据工作3，重构之前的重新加载模块方法
 // TODO 5、编写模块卸载方法
 // TODO 6、编写文档、注释并充分测试各个地方的代码
-// TODO 7、改成多工程项目，编写模块系统cli，编写示例应用
+// TODO 7、改成多工程项目，编写模块系统cli和示例应用
 public class ModuleFactory {
     public static final String DEFAULT_VERSION = "default";
     public static final String VERSION_SPLIT = ":";
@@ -38,7 +38,14 @@ public class ModuleFactory {
      * @return
      */
     public String getModuleName(Class<? extends Module> moduleClass) {
-        String name = moduleClass.getName();
+        ModuleName moduleName = moduleClass.getDeclaredAnnotation(ModuleName.class);
+        String name = null;
+        if(moduleName != null) {
+            name = moduleName.value();
+        }
+        if(name == null || name.length() == 0) {
+            name = moduleClass.getName();
+        }
         ModuleVersion version = moduleClass.getDeclaredAnnotation(ModuleVersion.class);
         String v = DEFAULT_VERSION;
         if(version != null) {

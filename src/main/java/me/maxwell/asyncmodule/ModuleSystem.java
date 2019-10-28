@@ -11,8 +11,21 @@ public class ModuleSystem {
     }
 
     public ModuleSystem(Map<String, ClassLoaderBuilder> config, ModuleLoadedListener listener) {
-        this.classLoaderFactory = new ClassLoaderFactory(config);
-        this.moduleFactory = new ModuleFactory(this.classLoaderFactory, listener);
+        /*this.classLoaderFactory = new ClassLoaderFactory(config);
+        this.moduleFactory = new ModuleFactory(this.classLoaderFactory, listener);*/
+    }
+
+    /**
+     * 添加类加载器
+     */
+    public void addClassLoader(String packageName, ModuleClassLoader classLoader) {
+    }
+
+    /**
+     *移除类加载器
+     */
+    public void removeClassLoader() {
+
     }
 
     public void loadModule(String moduleClassName) throws ClassNotFoundException {
@@ -32,7 +45,7 @@ public class ModuleSystem {
 
     @SuppressWarnings("unchecked")
     public void reloadModule(String moduleClassName, String version, Map<String, ClassLoaderBuilder> config) throws ClassNotFoundException {
-        if(!moduleFactory.isLoaded()) {
+        /*if(!moduleFactory.isLoaded()) {
             return;
         }
 
@@ -65,7 +78,7 @@ public class ModuleSystem {
             String className = moduleName.split(ModuleFactory.VERSION_SPLIT)[1];
             Class<? extends Module> moduleClass = (Class<? extends Module>)newFinder.loadClass(className, thisVersion);
             newFactory.getModuleInfo(moduleClass);
-        }
+        }*/
     }
 
     public ModuleFactory getModuleFactory() {
